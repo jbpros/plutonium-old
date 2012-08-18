@@ -1,0 +1,25 @@
+{
+  "author": "Julien Biezemans <jb@jbpros.com>",
+  "name": "albums-infra",
+  "version": "0.0.0",
+  "description": "Infrastructure framework used by a.lbu.ms",
+  "main": "lib/main",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/jbpros/albums-infra.git"
+  },
+  "keywords": [
+    "ddd",
+    "cqrs",
+    "event sourcing"
+  ],
+  "dependencies": {
+    "coffee-script": "1.3.3",
+    "async": "0.1.22"
+  },
+  "license": "BSD",
+  "private": true
+}

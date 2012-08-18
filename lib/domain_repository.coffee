@@ -1,0 +1,75 @@
+async = require 'async'
+
+class DomainRepository
+
+  @aggregates    = []
+  @eventHandlers = {}
+
+  @transact: (operation, callback) =>
+    operation (err) =>
+      if err
+        @rollback callback
+      else
+        @commit callback
+
+  @createNewUid: (callback) =>
+    @store.createNewUid callback
+
+  @findAggregateByUid: (entityConstructor, uid, callback) =>
+    @store.findAllByAggregateUid uid, (err, events) ->
+      if err?
+        callback err
+      else
+        entityConstructor.buildFromEvents events, callback
+
+  @add: (aggregate) =>
+    @aggregates.push aggregate
+
+  @commit: (callback) =>
+    aggregateQueue = async.queue (aggregate, aggregateTaskCallback) =>
+      firstEvent = aggregate.appliedEvents.shift()
+
+      if firstEvent?
+        queue = async.queue (event, eventTaskCallback) =>
+          nextEvent = aggregate.appliedEvents.shift()
+          queue.push nextEvent if nextEvent?
+
+          @store.saveEvent event, (err, event) =>
+            if err
+              throw err if err? # todo: don't throw, callback with error (with Q.all()) (or not...)
+            else
+              @publishEvent event, eventTaskCallback
+        , 1
+
+        queue.drain = aggregateTaskCallback
+        queue.push [firstEvent]
+      else
+        aggregateTaskCallback(null)
+
+    , Infinity # TODO determine if it is safe to treat all aggregates in parallel?
+
+    aggregateQueue.drain = callback # todo: empty @aggregates to free up memory?
+                                    # todo: handle errors from child queues with Q.all()
+    aggregateQueue.push @aggregates
+
+  @rollback: (callback) =>
+    @aggregates.forEach (aggregate) =>
+      aggregate.appliedEvents = []
+    callback()
+
+  @onEvent: (eventName, eventHandler) =>
+    @eventHandlers[eventName] ?= []
+    @eventHandlers[eventName].push eventHandler
+
+  @publishEvent: (event, callback) =>
+    eventHandlers = @eventHandlers[event.name] or []
+    queue = async.queue (eventHandler, eventHandlerTaskCallback) =>
+      eventHandler event, (err) ->
+        throw err if err? # todo: don't throw, callback with error (with Q.all()) (or not...)
+        eventHandlerTaskCallback()
+    , 1
+
+    queue.drain = callback
+    queue.push eventHandlers
+
+module.exports = DomainRepository
