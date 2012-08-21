@@ -66,7 +66,7 @@ class CouchDbEventStore extends EventStore
             callback null, event
 
   _urlToDatabase: (database = "albums_development") ->
-    "http://localhost:5984/#{database}"
+    process.env['EVENT_STORE_COUCHDB_URL'] || "http://localhost:5984/#{database}"
 
   _urlToDocument: (document) ->
     "#{@_urlToDatabase()}/#{document}"
