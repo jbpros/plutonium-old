@@ -1,8 +1,7 @@
 async       = require "async"
 uuid        = require "node-uuid"
 request     = require "request"
-albumsInfra = require 'albums-infra'
-Event       = albumsInfra.Event
+Event       = require "../event"
 EventStore  = require "../event_store"
 
 class CouchDbEventStore extends EventStore

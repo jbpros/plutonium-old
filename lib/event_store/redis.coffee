@@ -1,7 +1,6 @@
 redis       = require "redis"
 async       = require "async"
-albumsInfra = require 'albums-infra'
-Event       = albumsInfra.Event
+Event       = require "../event"
 
 client      = redis.createClient()
 
