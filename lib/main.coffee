@@ -3,4 +3,5 @@ module.exports =
   DomainRepository: require "./domain_repository"
   Entity: require "./entity"
   Event: require "./event"
+  EventStore: require "./event_store"
   Report: require "./report"
