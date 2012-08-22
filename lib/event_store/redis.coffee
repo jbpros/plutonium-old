@@ -2,21 +2,21 @@ redis       = require "redis"
 async       = require "async"
 Event       = require "../event"
 
-client      = redis.createClient()
-
-client.on 'error', (error) ->
-  throw error
-
 class EventStore
+  constructor: ->
+    @client      = redis.createClient()
+    @client.on 'error', (error) ->
+      throw error
+
   createNewUid: (callback) ->
-    client.incr 'uid', callback
+    @client.incr 'uid', callback
 
   findAllByAggregateUid: (aggregateUid, callback) ->
-    client.lrange "aggregate-timeline:#{aggregateUid}", 0, -1, (err, eventIds) =>
+    @client.lrange "aggregate-timeline:#{aggregateUid}", 0, -1, (err, eventIds) =>
 
-      findEventById = (eventUid, callback) ->
-        client.get "event:#{eventUid}", (err, eventName) ->
-          client.hgetall "event:#{eventUid}:data", (err, eventData) ->
+      findEventById = (eventUid, callback) =>
+        @client.get "event:#{eventUid}", (err, eventName) =>
+          @client.hgetall "event:#{eventUid}:data", (err, eventData) ->
             if err
               callback err
             else
@@ -26,10 +26,10 @@ class EventStore
       async.map eventIds, findEventById, callback
 
   saveEvent: (event, callback) ->
-    @createNewUid (err, eventUid) ->
+    @createNewUid (err, eventUid) =>
       event.uid = eventUid
 
-      transaction = client.multi [
+      transaction = @client.multi [
         ["set", "event:#{eventUid}", event.name],
         ["hmset", "event:#{eventUid}:data", event.data],
         ["rpush", "event-timeline", eventUid],
