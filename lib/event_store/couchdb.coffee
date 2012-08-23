@@ -60,7 +60,7 @@ class CouchDbEventStore extends EventStore
         json:   payload
       , (err, response, body) ->
           if err? or not body.ok
-            callback err || new Error("Couldn't persist event")
+            callback err or new Error("Couldn't persist event (#{body.error} - #{body.reason})")
           else
             callback null, event
 
