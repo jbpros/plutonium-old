@@ -3,10 +3,14 @@ async       = require "async"
 Event       = require "../event"
 
 class EventStore
-  constructor: ->
-    @client      = redis.createClient()
+  constructor: () ->
+    @client = redis.createClient()
     @client.on 'error', (error) ->
       throw error
+
+  setup: (callback) ->
+    @client.flushdb (err) ->
+      callback err
 
   createNewUid: (callback) ->
     @client.incr 'uid', callback

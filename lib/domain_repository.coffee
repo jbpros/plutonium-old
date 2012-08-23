@@ -1,9 +1,26 @@
-async = require 'async'
+async             = require "async"
+
+COUCHDB_STORE = "couchdb"
+REDIS_STORE   = "redis"
 
 class DomainRepository
 
   @aggregates    = []
   @eventHandlers = {}
+
+  @initializeStoreWithConfiguration: (configuration) =>
+    switch configuration.domain.store
+      when COUCHDB_STORE
+        CouchDbEventStore = require "./event_store/couchdb"
+        @store = new CouchDbEventStore configuration.domain.uri
+      when REDIS_STORE
+        RedisEventStore = require "./event_store/redis"
+        @store = new RedisEventStore
+      else
+        throw new Error "Unknown domain repository store \"#{configuration.domain.store}\"."
+
+  @setupStore: (callback) =>
+    @store.setup callback
 
   @transact: (operation, callback) =>
     operation (err) =>

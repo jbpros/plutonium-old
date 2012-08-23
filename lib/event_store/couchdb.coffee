@@ -5,8 +5,7 @@ Event       = require "../event"
 EventStore  = require "../event_store"
 
 class CouchDbEventStore extends EventStore
-
-  constructor: () ->
+  constructor: (@uri) ->
 
   setup: (callback) =>
     async.series [@_setupDatabase, @_setupViews], callback
@@ -65,24 +64,26 @@ class CouchDbEventStore extends EventStore
           else
             callback null, event
 
-  _urlToDatabase: (database = "albums_development") ->
-    process.env['EVENT_STORE_COUCHDB_URL'] || "http://localhost:5984/#{database}"
-
   _urlToDocument: (document) ->
-    "#{@_urlToDatabase()}/#{document}"
+    "#{@uri}/#{document}"
 
   _setupDatabase: (callback) =>
     request
-      method: "put"
-      uri:    @_urlToDatabase()
-      json:   {}
-    , (err, response, body) ->
-        if err?
-          callback err
-        else if body.ok or (not body.ok and body.error is "file_exists")
-          callback null
-        else
-          callback new Error "Couldn't create database; unknown reason (#{body})"
+      method: "delete"
+      uri: @uri
+      json: {}
+    , =>
+      request
+        method: "put"
+        uri:    @uri
+        json:   {}
+      , (err, response, body) ->
+          if err?
+            callback err
+          else if body.ok or (not body.ok and body.error is "file_exists")
+            callback null
+          else
+            callback new Error "Couldn't create database; unknown reason (#{body})"
 
   _setupViews: (callback) =>
     async.parallel [
