@@ -1,4 +1,4 @@
-async             = require "async"
+async = require "async"
 
 COUCHDB_STORE = "couchdb"
 REDIS_STORE   = "redis"
