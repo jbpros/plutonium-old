@@ -13,7 +13,10 @@ class EventStore
   createNewUid: (callback) =>
     throw new Error "Implement me"
 
-  findAllByAggregateUid: (aggregateUid, callback) ->
+  findAll: (options, callback) ->
+    throw new Error "implement me"
+
+  findAllByAggregateUid: (aggregateUid, options, callback) ->
     throw new Error "Implement me"
 
   saveEvent: (event, callback) =>

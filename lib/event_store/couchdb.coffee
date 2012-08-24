@@ -14,7 +14,33 @@ class CouchDbEventStore extends EventStore
     uid = uuid.v4()
     callback null, uid
 
-  findAllByAggregateUid: (aggregateUid, callback) ->
+  findAll: (options, callback) ->
+    callback = options unless callback?
+
+    request
+      uri: @_urlToDocument("_design/events/_view/byTimestamp?attachments=true")
+      json: {}
+    , (err, response, body) =>
+      if err?
+        callback err
+      else if body.error?
+        callback new Error("Error: #{body.error} - #{body.reason}")
+      else
+        events = []
+        rows = body.rows.sort (a, b) ->
+          a.value.timestamp - b.value.timestamp
+
+        for row in rows
+          eventObject        = row.value
+          event              = new Event eventObject.name, eventObject.data
+          event.uid          = eventObject.uid
+          event.aggregateUid = eventObject.aggregateUid
+          events.push event
+        callback null, events
+
+  findAllByAggregateUid: (aggregateUid, options, callback) ->
+    callback = options unless callback?
+
     request
       uri: @_urlToDocument("_design/events/_view/byAggregate?key=\"#{aggregateUid}\"")
       json: {}
@@ -27,9 +53,10 @@ class CouchDbEventStore extends EventStore
           a.value.timestamp - b.value.timestamp
 
         for row in rows
-          eventObject = row.value
-          event       = new Event eventObject.name, eventObject.data
-          event.uid   = eventObject.uid
+          eventObject        = row.value
+          event              = new Event eventObject.name, eventObject.data
+          event.uid          = eventObject.uid
+          event.aggregateUid = eventObject.aggregateUid
           events.push event
         callback null, events
 
@@ -96,6 +123,8 @@ class CouchDbEventStore extends EventStore
             byAggregateEventCount:
               map: "(doc) -> if doc.aggregateUid? then emit doc.aggregateUid, 1"
               reduce: "_sum"
+            byTimestamp:
+              map: "(doc) -> if doc.aggregateUid? then emit doc.timestamp, doc"
         , callback
     ], callback
 

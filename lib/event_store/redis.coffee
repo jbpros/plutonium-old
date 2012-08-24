@@ -15,7 +15,9 @@ class EventStore
   createNewUid: (callback) ->
     @client.incr 'uid', callback
 
-  findAllByAggregateUid: (aggregateUid, callback) ->
+  findAllByAggregateUid: (aggregateUid, options, callback) ->
+    callback = options unless callback?
+
     @client.lrange "aggregate-timeline:#{aggregateUid}", 0, -1, (err, eventIds) =>
 
       findEventById = (eventUid, callback) =>

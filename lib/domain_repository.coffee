@@ -32,12 +32,25 @@ class DomainRepository
   @createNewUid: (callback) =>
     @store.createNewUid callback
 
-  @findAggregateByUid: (entityConstructor, uid, callback) =>
+  @findAggregateByUid: (entityConstructor, uid, options, callback) =>
+    callback = options unless callback?
+
     @store.findAllByAggregateUid uid, (err, events) ->
       if err?
         callback err
       else
         entityConstructor.buildFromEvents events, callback
+
+  @replayAllEvents: (callback) =>
+    @store.findAll (err, events) =>
+      if events.length > 0
+        eventQueue = async.queue (event, eventTaskCallback) =>
+          @publishEvent event, eventTaskCallback
+        , 1
+        eventQueue.drain = callback
+        eventQueue.push events
+      else
+        callback()
 
   @add: (aggregate) =>
     @aggregates.push aggregate
@@ -52,8 +65,8 @@ class DomainRepository
           queue.push nextEvent if nextEvent?
 
           @store.saveEvent event, (err, event) =>
-            if err
-              throw err if err? # todo: don't throw, callback with error (with Q.all()) (or not...)
+            if err?
+              eventTaskCallback err
             else
               @publishEvent event, eventTaskCallback
         , 1
@@ -82,8 +95,10 @@ class DomainRepository
     eventHandlers = @eventHandlers[event.name] or []
     queue = async.queue (eventHandler, eventHandlerTaskCallback) =>
       eventHandler event, (err) ->
-        throw err if err? # todo: don't throw, callback with error (with Q.all()) (or not...)
-        eventHandlerTaskCallback()
+        if err?
+          eventHandlerTaskCallback err
+        else
+          eventHandlerTaskCallback null
     , 1
 
     queue.drain = callback
