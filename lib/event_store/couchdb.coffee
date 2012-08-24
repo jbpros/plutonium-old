@@ -15,31 +15,25 @@ class CouchDbEventStore extends EventStore
     callback null, uid
 
   findAll: (options, callback) ->
-    callback = options unless callback?
+    unless callback?
+      callback = options
+      options  = {}
 
     request
       uri: @_urlToDocument("_design/events/_view/byTimestamp?attachments=true")
       json: {}
     , (err, response, body) =>
-      if err?
-        callback err
+      if err? # todo: improve errors
+        throw err
       else if body.error?
-        callback new Error("Error: #{body.error} - #{body.reason}")
+        throw new Error("Error: #{body.error} - #{body.reason}")
       else
-        events = []
-        rows = body.rows.sort (a, b) ->
-          a.value.timestamp - b.value.timestamp
-
-        for row in rows
-          eventObject        = row.value
-          event              = new Event eventObject.name, eventObject.data
-          event.uid          = eventObject.uid
-          event.aggregateUid = eventObject.aggregateUid
-          events.push event
-        callback null, events
+        @_instantiateEventsFromRows body.rows, options, callback
 
   findAllByAggregateUid: (aggregateUid, options, callback) ->
-    callback = options unless callback?
+    unless callback?
+      callback = options
+      options  = {}
 
     request
       uri: @_urlToDocument("_design/events/_view/byAggregate?key=\"#{aggregateUid}\"")
@@ -48,17 +42,7 @@ class CouchDbEventStore extends EventStore
       if err?
         callback err
       else
-        events = []
-        rows = body.rows.sort (a, b) ->
-          a.value.timestamp - b.value.timestamp
-
-        for row in rows
-          eventObject        = row.value
-          event              = new Event eventObject.name, eventObject.data
-          event.uid          = eventObject.uid
-          event.aggregateUid = eventObject.aggregateUid
-          events.push event
-        callback null, events
+        @_instantiateEventsFromRows body.rows, options, callback
 
   saveEvent: (event, callback) =>
     @createNewUid (err, eventUid) =>
@@ -91,8 +75,63 @@ class CouchDbEventStore extends EventStore
           else
             callback null, event
 
+  _urlToDocumentAttachment: (document, attachment) ->
+    "#{@_urlToDocument document}/#{attachment}"
+
   _urlToDocument: (document) ->
     "#{@uri}/#{document}"
+
+  _instantiateEventsFromRows: (rows, options, callback) ->
+    unless callback?
+      callback = options
+      options  = {}
+
+    options.loadBlobs ?= false
+
+    rows = rows.sort (a, b) ->
+      a.value.timestamp - b.value.timestamp
+
+    events = []
+    rowsQueue = async.queue (row, rowCallback) =>
+      value        = row.value
+      name         = value.name
+      uid          = value.uid
+      aggregateUid = value.aggregateUid
+      data         = value.data
+      attachments  = value._attachments
+
+      if options.loadBlobs and attachments?
+        attachmentsQueue = async.queue (attachment, attachmentCallback) =>
+          request
+            uri: @_urlToDocumentAttachment uid, attachment
+            encoding: null # i.e. buffer
+          , (err, response, body) =>
+            if err? # todo: improve errors
+              throw err
+            else if body.error?
+              throw new Error("Error: #{body.error} - #{body.reason}")
+            else
+              data[attachment] = body
+              attachmentCallback()
+        , 1
+
+        attachmentsQueue.drain = ->
+          event              = new Event name, data
+          event.uid          = uid
+          event.aggregateUid = aggregateUid
+          events.push event
+          rowCallback()
+
+        for k, _ of attachments
+          attachmentsQueue.push k
+      else
+        rowCallback()
+    , 1
+
+    rowsQueue.drain = ->
+      callback null, events
+
+    rowsQueue.push rows
 
   _setupDatabase: (callback) =>
     request

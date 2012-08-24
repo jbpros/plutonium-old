@@ -19,7 +19,7 @@ class DomainRepository
       else
         throw new Error "Unknown domain repository store \"#{configuration.domain.store}\"."
 
-  @setupStore: (callback) =>
+  @setup: (callback) =>
     @store.setup callback
 
   @transact: (operation, callback) =>
@@ -42,7 +42,7 @@ class DomainRepository
         entityConstructor.buildFromEvents events, callback
 
   @replayAllEvents: (callback) =>
-    @store.findAll (err, events) =>
+    @store.findAll loadBlobs: true, (err, events) =>
       if events.length > 0
         eventQueue = async.queue (event, eventTaskCallback) =>
           @publishEvent event, eventTaskCallback
