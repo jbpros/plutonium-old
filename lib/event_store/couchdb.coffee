@@ -38,7 +38,7 @@ class CouchDbEventStore extends EventStore
     request
       uri: @_urlToDocument("_design/events/_view/byAggregate?key=\"#{aggregateUid}\"")
       json: {}
-    , (err, response, body) ->
+    , (err, response, body) =>
       if err?
         callback err
       else
@@ -100,6 +100,13 @@ class CouchDbEventStore extends EventStore
       data         = value.data
       attachments  = value._attachments
 
+      pushEvent = (callback) ->
+        event              = new Event name, data
+        event.uid          = uid
+        event.aggregateUid = aggregateUid
+        events.push event
+        callback()
+
       if options.loadBlobs and attachments?
         attachmentsQueue = async.queue (attachment, attachmentCallback) =>
           request
@@ -116,16 +123,12 @@ class CouchDbEventStore extends EventStore
         , 1
 
         attachmentsQueue.drain = ->
-          event              = new Event name, data
-          event.uid          = uid
-          event.aggregateUid = aggregateUid
-          events.push event
-          rowCallback()
+          pushEvent rowCallback
 
         for k, _ of attachments
           attachmentsQueue.push k
       else
-        rowCallback()
+        pushEvent rowCallback
     , 1
 
     rowsQueue.drain = ->
