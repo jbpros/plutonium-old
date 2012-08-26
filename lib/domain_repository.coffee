@@ -56,6 +56,10 @@ class DomainRepository
     @aggregates.push aggregate
 
   @commit: (callback) =>
+    if @aggregates.length is 0
+      callback null
+      return
+
     aggregateQueue = async.queue (aggregate, aggregateTaskCallback) =>
       firstEvent = aggregate.appliedEvents.shift()
 
@@ -74,7 +78,7 @@ class DomainRepository
         queue.drain = aggregateTaskCallback
         queue.push [firstEvent]
       else
-        aggregateTaskCallback(null)
+        aggregateTaskCallback null
 
     , Infinity # TODO determine if it is safe to treat all aggregates in parallel?
 
@@ -93,6 +97,10 @@ class DomainRepository
 
   @publishEvent: (event, callback) =>
     eventHandlers = @eventHandlers[event.name] or []
+    if eventHandlers.length is 0
+      callback null
+      return
+
     queue = async.queue (eventHandler, eventHandlerTaskCallback) =>
       eventHandler event, (err) ->
         if err?
