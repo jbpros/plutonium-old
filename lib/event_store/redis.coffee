@@ -16,10 +16,9 @@ class EventStore
     @client.incr 'uid', callback
 
   findAllByAggregateUid: (aggregateUid, options, callback) ->
-    callback = options unless callback?
+    [options, callback] = [{}, options] unless callback?
 
     @client.lrange "aggregate-timeline:#{aggregateUid}", 0, -1, (err, eventIds) =>
-
       findEventById = (eventUid, callback) =>
         @client.get "event:#{eventUid}", (err, eventName) =>
           @client.hgetall "event:#{eventUid}:data", (err, eventData) ->

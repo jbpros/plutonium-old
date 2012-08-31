@@ -82,10 +82,7 @@ class CouchDbEventStore extends EventStore
     "#{@uri}/#{document}"
 
   _instantiateEventsFromRows: (rows, options, callback) ->
-    unless callback?
-      callback = options
-      options  = {}
-
+    [options, callback] = [{}, options] unless callback?
     options.loadBlobs ?= false
 
     rows = rows.sort (a, b) ->

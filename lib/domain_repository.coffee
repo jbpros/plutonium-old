@@ -33,7 +33,7 @@ class DomainRepository
     @store.createNewUid callback
 
   @findAggregateByUid: (entityConstructor, uid, options, callback) =>
-    callback = options unless callback?
+    [options, callback] = [{}, options] unless callback?
 
     @store.findAllByAggregateUid uid, (err, events) ->
       if err?
