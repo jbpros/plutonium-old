@@ -9,15 +9,15 @@ class DomainRepository
   @eventHandlers = {}
 
   @initializeStoreWithConfiguration: (configuration) =>
-    switch configuration.domain.store
+    switch configuration.store
       when COUCHDB_STORE
         CouchDbEventStore = require "./event_store/couchdb"
-        @store = new CouchDbEventStore configuration.domain.uri
+        @store = new CouchDbEventStore configuration.uri
       when REDIS_STORE
         RedisEventStore = require "./event_store/redis"
         @store = new RedisEventStore
       else
-        throw new Error "Unknown domain repository store \"#{configuration.domain.store}\"."
+        throw new Error "Unknown domain repository store \"#{configuration.store}\"."
 
   @setup: (callback) =>
     @store.setup callback
