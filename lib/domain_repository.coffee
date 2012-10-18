@@ -91,6 +91,9 @@ class DomainRepository
       aggregate.appliedEvents = []
     callback()
 
+  @clearEventHandlers: =>
+    @eventHandlers = {}
+
   @onEvent: (eventName, eventHandler) =>
     @eventHandlers[eventName] ?= []
     @eventHandlers[eventName].push eventHandler
