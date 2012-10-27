@@ -8,10 +8,11 @@ class Entity
   @eventHandlers = {}
 
   constructor: ->
-    @name          = "Entity"
     @uid           = null
     @appliedEvents = []
-    @attributes    = {}
+
+  toString: ->
+    "[object Entity:#{@constructor.name}]"
 
   triggerEvent: (eventName, attributes, callback) ->
     event = new Event eventName, attributes
@@ -36,9 +37,6 @@ class Entity
     deferred.then ->
       callback null
     , callback
-
-  toString: ->
-    "[entityObject #{@name}]"
 
   @findByUid: (uid, callback) ->
     DomainRepository.findAggregateByUid @, uid, callback
