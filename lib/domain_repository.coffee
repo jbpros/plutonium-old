@@ -1,12 +1,17 @@
-async = require "async"
+async        = require "async"
+EventEmitter = require("events").EventEmitter
 
 COUCHDB_STORE = "couchdb"
 REDIS_STORE   = "redis"
 
 class DomainRepository
 
-  @aggregates    = []
-  @eventHandlers = {}
+  # TODO: inject store instance
+  # TODO: inject logger
+
+  @initialize: (@logger) ->
+    @emitter    = new EventEmitter
+    @aggregates = []
 
   @initializeStoreWithConfiguration: (configuration) =>
     switch configuration.store
@@ -23,10 +28,13 @@ class DomainRepository
     @store.setup callback
 
   @transact: (operation, callback) =>
+    @logger.log "transaction", "starting"
     operation (err) =>
-      if err
+      if err?
+        @logger.alert "transaction", "rolling back (#{err})"
         @rollback callback
       else
+        @logger.log "transaction", "comitting"
         @commit callback
 
   @createNewUid: (callback) =>
@@ -45,7 +53,8 @@ class DomainRepository
     @store.findAll loadBlobs: true, (err, events) =>
       if events.length > 0
         eventQueue = async.queue (event, eventTaskCallback) =>
-          @publishEvent event, eventTaskCallback
+          @publishEvent event
+          eventTaskCallback()
         , 1
         eventQueue.drain = callback
         eventQueue.push events
@@ -56,9 +65,9 @@ class DomainRepository
     @aggregates.push aggregate
 
   @commit: (callback) =>
-    if @aggregates.length is 0
-      callback null
-      return
+    return callback nill if @aggregates.length is 0
+
+    committedEvents = []
 
     aggregateQueue = async.queue (aggregate, aggregateTaskCallback) =>
       firstEvent = aggregate.appliedEvents.shift()
@@ -68,11 +77,13 @@ class DomainRepository
           nextEvent = aggregate.appliedEvents.shift()
           queue.push nextEvent if nextEvent?
 
+          @logger.log "commit", "saving event \"#{event.name}\" for aggregate #{event.aggregateUid}"
           @store.saveEvent event, (err, event) =>
             if err?
               eventTaskCallback err
             else
-              @publishEvent event, eventTaskCallback
+              committedEvents.push event
+              eventTaskCallback null
         , 1
 
         queue.drain = aggregateTaskCallback
@@ -82,37 +93,43 @@ class DomainRepository
 
     , Infinity # TODO determine if it is safe to treat all aggregates in parallel?
 
-    aggregateQueue.drain = callback # todo: empty @aggregates to free up memory?
-                                    # todo: handle errors from child queues with Q.all()
+    aggregateQueue.drain = (err) =>
+      return callback err if err?
+      # todo: handle errors from child queues with Q.all()
+      for event in committedEvents
+        @publishEvent event
+      callback()
     aggregateQueue.push @aggregates
+    @aggregates = []
 
   @rollback: (callback) =>
     @aggregates.forEach (aggregate) =>
       aggregate.appliedEvents = []
     callback()
 
-  @clearEventHandlers: =>
-    @eventHandlers = {}
+  @onEvent: (eventName, options, listener) ->
+    [options, listener] = [{}, options] unless listener?
 
-  @onEvent: (eventName, eventHandler) =>
-    @eventHandlers[eventName] ?= []
-    @eventHandlers[eventName].push eventHandler
+    register = "on"
 
-  @publishEvent: (event, callback) =>
-    eventHandlers = @eventHandlers[event.name] or []
-    if eventHandlers.length is 0
-      callback null
-      return
+    if options.forAggregateUid?
+      innerListener = listener
+      listener = (event) =>
+        if event.aggregateUid is options.forAggregateUid
+          @emitter.removeListener eventName, listener if options.once
+          innerListener event
+    else if options.once
+      register = "once"
 
-    queue = async.queue (eventHandler, eventHandlerTaskCallback) =>
-      eventHandler event, (err) ->
-        if err?
-          eventHandlerTaskCallback err
-        else
-          eventHandlerTaskCallback null
-    , 1
+    listenerWithCallback = (event) =>
+      listener event, =>
+        @logger.log "event bus", "listener duty finished"
 
-    queue.drain = callback
-    queue.push eventHandlers
+    @emitter[register].call @emitter, eventName, listenerWithCallback
+
+  @publishEvent: (event) ->
+    @logger.log "publishEvent", "#{event.name} for aggregate #{event.aggregateUid}"
+    process.nextTick =>
+      @emitter.emit event.name, event
 
 module.exports = DomainRepository

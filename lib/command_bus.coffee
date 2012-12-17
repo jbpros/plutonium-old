@@ -7,18 +7,20 @@ class CommandBus
   @registerCommandHandler: (command, handler) =>
     commandHandlers[command] = handler
 
-  @executeCommand: (command, expandable_args, callback) ->
-    args     = Array.prototype.slice.apply arguments
-    command  = args.shift()
-    callback = args.pop()
+  @executeCommand: (commandName, args..., callback) ->
+    @getHandlerForCommand commandName, (err, commandHandler) ->
+      return callback err if err?
 
-    commandHandler = commandHandlers[command]
-    if not commandHandler?
-      callback new Error "No handler for command \"#{command}\" was found"
-    else
       proceed = (callback) ->
         args.push callback
         commandHandler.apply null, args
       DomainRepository.transact proceed, callback
+
+  @getHandlerForCommand: (commandName, callback) ->
+    commandHandler = commandHandlers[commandName]
+    if not commandHandler?
+      callback new Error "No handler for command \"#{commandName}\" was found"
+    else
+      callback null, commandHandler
 
 module.exports = CommandBus
