@@ -5,3 +5,4 @@ module.exports =
   Event: require "./event"
   EventStore: require "./event_store"
   Report: require "./report"
+  Service: require "./service"

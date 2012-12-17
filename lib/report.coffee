@@ -1,5 +1,3 @@
-DomainRepository = require './domain_repository'
-
 class Report
   constructor: (@attributes) ->
 
@@ -20,8 +18,5 @@ class Report
     for k, v of @attributes
       attrs.push "#{k}=\"#{v}\"" unless v instanceof Buffer
     "[reportObject #{@.constructor.name} <#{attrs.join ', '}>]"
-
-  @onEvent: (eventName, callback) ->
-    DomainRepository.onEvent eventName, callback
 
 module.exports = Report

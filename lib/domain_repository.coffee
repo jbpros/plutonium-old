@@ -6,28 +6,14 @@ REDIS_STORE   = "redis"
 
 class DomainRepository
 
-  # TODO: inject store instance
-  # TODO: inject logger
+  constructor: (@store, @logger) ->
+    throw new Error "Missing store" unless @store?
+    thorw new Error "Missing logger" unless @logger?
 
-  @initialize: (@logger) ->
     @emitter    = new EventEmitter
     @aggregates = []
 
-  @initializeStoreWithConfiguration: (configuration) =>
-    switch configuration.store
-      when COUCHDB_STORE
-        CouchDbEventStore = require "./event_store/couchdb"
-        @store = new CouchDbEventStore configuration.uri
-      when REDIS_STORE
-        RedisEventStore = require "./event_store/redis"
-        @store = new RedisEventStore
-      else
-        throw new Error "Unknown domain repository store \"#{configuration.store}\"."
-
-  @setup: (callback) =>
-    @store.setup callback
-
-  @transact: (operation, callback) =>
+  transact: (operation, callback) ->
     @logger.log "transaction", "starting"
     operation (err) =>
       if err?
@@ -37,10 +23,10 @@ class DomainRepository
         @logger.log "transaction", "comitting"
         @commit callback
 
-  @createNewUid: (callback) =>
+  createNewUid: (callback) ->
     @store.createNewUid callback
 
-  @findAggregateByUid: (entityConstructor, uid, options, callback) =>
+  findAggregateByUid: (entityConstructor, uid, options, callback) ->
     [options, callback] = [{}, options] unless callback?
 
     @store.findAllByAggregateUid uid, (err, events) ->
@@ -49,7 +35,7 @@ class DomainRepository
       else
         entityConstructor.buildFromEvents events, callback
 
-  @replayAllEvents: (callback) =>
+  replayAllEvents: (callback) ->
     @store.findAll loadBlobs: true, (err, events) =>
       if events.length > 0
         eventQueue = async.queue (event, eventTaskCallback) =>
@@ -61,10 +47,10 @@ class DomainRepository
       else
         callback()
 
-  @add: (aggregate) =>
+  add: (aggregate) ->
     @aggregates.push aggregate
 
-  @commit: (callback) =>
+  commit: (callback) ->
     return callback nill if @aggregates.length is 0
 
     committedEvents = []
@@ -102,12 +88,12 @@ class DomainRepository
     aggregateQueue.push @aggregates
     @aggregates = []
 
-  @rollback: (callback) =>
+  rollback: (callback) ->
     @aggregates.forEach (aggregate) =>
       aggregate.appliedEvents = []
     callback()
 
-  @onEvent: (eventName, options, listener) ->
+  onEvent: (eventName, options, listener) ->
     [options, listener] = [{}, options] unless listener?
 
     register = "on"
@@ -127,7 +113,7 @@ class DomainRepository
 
     @emitter[register].call @emitter, eventName, listenerWithCallback
 
-  @publishEvent: (event) ->
+  publishEvent: (event) ->
     @logger.log "publishEvent", "#{event.name} for aggregate #{event.aggregateUid}"
     process.nextTick =>
       @emitter.emit event.name, event
