@@ -1,3 +1,3 @@
-# A.lbu.ms's Infrastructure Framework
+# Plutonium
 
-*TBD*
+A DDD, Event Sourcing and CQRS framework.
