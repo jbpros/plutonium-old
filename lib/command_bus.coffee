@@ -2,8 +2,10 @@ DomainRepository = require "./domain_repository"
 
 class CommandBus
 
-  constructor: (@domainRepository) ->
+  constructor: ({@domainRepository, @logger}) ->
     throw new Error "Missing domain repository" unless @domainRepository?
+    throw new Error "Missing logger" unless @logger?
+
     @commandHandlers = {}
 
   registerCommandHandler: (command, handler) ->

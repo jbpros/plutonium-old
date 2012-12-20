@@ -4,6 +4,7 @@ Event       = require "../event"
 
 class EventStore
   constructor: () ->
+    throw new Error "NOT IMPLEMENTED, NEEDS REWORK"
     @client = redis.createClient()
     @client.on 'error', (error) ->
       throw error

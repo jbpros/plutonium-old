@@ -1,16 +1,14 @@
-async        = require "async"
-EventEmitter = require("events").EventEmitter
+async = require "async"
 
 COUCHDB_STORE = "couchdb"
 REDIS_STORE   = "redis"
 
 class DomainRepository
 
-  constructor: (@store, @logger) ->
+  constructor: ({@store, @emitter, @logger}) ->
     throw new Error "Missing store" unless @store?
-    thorw new Error "Missing logger" unless @logger?
-
-    @emitter    = new EventEmitter
+    throw new Error "Missing event bus emitter" unless @emitter?
+    throw new Error "Missing logger" unless @logger?
     @aggregates = []
 
   transact: (operation, callback) ->
@@ -39,8 +37,7 @@ class DomainRepository
     @store.findAll loadBlobs: true, (err, events) =>
       if events.length > 0
         eventQueue = async.queue (event, eventTaskCallback) =>
-          @publishEvent event
-          eventTaskCallback()
+          @publishEvent event, eventTaskCallback
         , 1
         eventQueue.drain = callback
         eventQueue.push events
@@ -81,10 +78,13 @@ class DomainRepository
 
     aggregateQueue.drain = (err) =>
       return callback err if err?
-      # todo: handle errors from child queues with Q.all()
-      for event in committedEvents
-        @publishEvent event
-      callback()
+      return callback null unless committedEvents.length > 0
+      publicationQueue = async.queue (event, publicationCallback) =>
+        @publishEvent event, publicationCallback
+      , Infinity
+      publicationQueue.drain = callback
+      publicationQueue.push committedEvents
+
     aggregateQueue.push @aggregates
     @aggregates = []
 
@@ -93,29 +93,12 @@ class DomainRepository
       aggregate.appliedEvents = []
     callback()
 
-  onEvent: (eventName, options, listener) ->
-    [options, listener] = [{}, options] unless listener?
-
-    register = "on"
-
-    if options.forAggregateUid?
-      innerListener = listener
-      listener = (event) =>
-        if event.aggregateUid is options.forAggregateUid
-          @emitter.removeListener eventName, listener if options.once
-          innerListener event
-    else if options.once
-      register = "once"
-
-    listenerWithCallback = (event) =>
-      listener event, =>
-        @logger.log "event bus", "listener duty finished"
-
-    @emitter[register].call @emitter, eventName, listenerWithCallback
-
-  publishEvent: (event) ->
+  publishEvent: (event, callback) ->
     @logger.log "publishEvent", "#{event.name} for aggregate #{event.aggregateUid}"
     process.nextTick =>
-      @emitter.emit event.name, event
+      @emitter.emit event, (err) =>
+        if err?
+          @logger.log "publishEvent", "event publication failed: #{err}"
+        callback err
 
 module.exports = DomainRepository

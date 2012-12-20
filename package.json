@@ -1,20 +1,21 @@
 {
   "author": "Julien Biezemans <jb@jbpros.com>",
-  "name": "albums-infra",
+  "name": "plutonium",
   "version": "0.0.0",
-  "description": "Infrastructure framework used by a.lbu.ms",
+  "description": "Infrastructure framework based on DDD, Event Sourcing and CQRS principles",
   "main": "lib/main",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"No tests yet.\""
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/jbpros/albums-infra.git"
+    "url": "git://github.com/jbpros/plutonium.git"
   },
   "keywords": [
     "ddd",
     "cqrs",
-    "event sourcing"
+    "event sourcing",
+    "framework"
   ],
   "dependencies": {
     "coffee-script": "1.3.3",
@@ -26,6 +27,11 @@
     "hiredis": "~0.1.14",
     "nano": "3.3.0"
   },
-  "license": "BSD",
+  "licenses": [
+    {
+      "type": "MIT",
+      "url": "http://github.com/jbpros/plutonium/LICENSE"
+    }
+  ],
   "private": true
 }
