@@ -18,7 +18,9 @@ class CommandBus
 
       proceed = (callback) ->
         args.push callback
-        commandHandler.apply null, args
+        # let synchronous stuff happen so that events can be registered to in calling code:
+        process.nextTick ->
+          commandHandler.apply null, args
       domainRepository.transact proceed, callback
 
   getHandlerForCommand: (commandName, callback) ->

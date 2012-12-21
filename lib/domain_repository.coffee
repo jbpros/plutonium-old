@@ -10,6 +10,7 @@ class DomainRepository
     throw new Error "Missing event bus emitter" unless @emitter?
     throw new Error "Missing logger" unless @logger?
     @aggregates = []
+    @directListeners = {}
 
   transact: (operation, callback) ->
     @logger.log "transaction", "starting"
@@ -96,9 +97,45 @@ class DomainRepository
   publishEvent: (event, callback) ->
     @logger.log "publishEvent", "#{event.name} for aggregate #{event.aggregateUid}"
     process.nextTick =>
-      @emitter.emit event, (err) =>
-        if err?
-          @logger.log "publishEvent", "event publication failed: #{err}"
-        callback err
+      @_publishEventToDirectListeners event, (err) =>
+        @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
+        @emitter.emit event, (err) =>
+          @logger.log "publishEvent", "event publication failed: #{err}" if err?
+          callback err
+
+  # Listen for events before they are published to the event bus
+  # Don't use this in reporters/reports! This is reserved for domain routines
+  onEvent: (eventName, options, listener) ->
+    [eventName, options, listener] = [eventName, {}, options] if not listener?
+
+    @directListeners[eventName] ?= []
+    directListeners = @directListeners[eventName]
+    directListenerIndex = directListeners.length
+
+    if options.once?
+      oneTimerListener = listener;
+      listener = (event, callback) ->
+        directListeners.splice directListenerIndex, 1
+        oneTimerListener event, callback
+
+    if options.forAggregateUid?
+      scopedListener = listener
+      listener = (event, callback) ->
+        if event.aggregateUid is options.forAggregateUid
+          scopedListener event, callback
+        else
+          callback null
+
+    directListeners.push listener
+
+  _publishEventToDirectListeners: (event, callback) ->
+    directListeners = @directListeners[event.name]
+    return callback null unless directListeners and directListeners.length > 0
+    queue = async.queue (directListener, callback) ->
+      directListener event, callback
+    , Infinity
+
+    queue.drain = callback
+    queue.push directListeners
 
 module.exports = DomainRepository

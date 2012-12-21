@@ -7,15 +7,18 @@ class Entity
   @eventHandlers = {}
 
   constructor: ->
-    @constructor._checkDomainRepositoryInstance()
-    @uid           = null
-    @appliedEvents = []
+    @constructor._checkDependencies()
+    @uid              = null
+    @appliedEvents    = []
+    @domainRepository = Entity.domainRepository
+    @commandBus       = Entity.commandBus
+    @logger           = Entity.logger
 
   toString: ->
     "[object Entity:#{@constructor.name}]"
 
   triggerEvent: (eventName, attributes, callback) ->
-    @constructor._checkDomainRepositoryInstance()
+    @constructor._checkDependencies()
     event = new Event eventName, attributes
     @applyEvent event, (err) =>
       if err?
@@ -23,11 +26,11 @@ class Entity
       else
         event.aggregateUid = @uid
         @appliedEvents.push event
-        Entity.domainRepository.add @
+        @domainRepository.add @
         callback null
 
   applyEvent: (event, callback) ->
-    @constructor._checkDomainRepositoryInstance()
+    @constructor._checkDependencies()
     eventHandlers = Entity.eventHandlers[event.name] || []
     deferredEventHandlers = []
     eventHandlers.forEach (eventHandler) =>
@@ -40,16 +43,20 @@ class Entity
       callback null
     , callback
 
-  @initialize: (domainRepository) =>
-    throw new Error "Missing domain repository" unless domainRepository?
-    Entity.domainRepository = domainRepository
+  @initialize: (options) =>
+    throw new Error "Missing domain repository" unless options.domainRepository?
+    throw new Error "Missing command bus" unless options.commandBus?
+    throw new Error "Missing logger" unless options.logger?
+    Entity.domainRepository = options.domainRepository
+    Entity.commandBus = options.commandBus
+    Entity.logger = options.logger
 
   @findByUid: (uid, callback) ->
-    @_checkDomainRepositoryInstance()
+    @_checkDependencies()
     Entity.domainRepository.findAggregateByUid @, uid, callback
 
   @buildFromEvents: (events, callback) ->
-    @_checkDomainRepositoryInstance()
+    @_checkDependencies()
     entity = new @
     queue = async.queue (event, eventTaskCallback) ->
       entity.applyEvent event, (err) ->
@@ -61,14 +68,15 @@ class Entity
     queue.push events
 
   @createNewUid: (callback) =>
-    @_checkDomainRepositoryInstance()
+    @_checkDependencies()
     @domainRepository.createNewUid callback
 
   @_onEvent: (eventName, callback) =>
     @eventHandlers[eventName] ?= []
     @eventHandlers[eventName].push callback
 
-  @_checkDomainRepositoryInstance: =>
+  @_checkDependencies: =>
     throw new Error "Domain repository instance not set on constructor" unless @domainRepository?
+    throw new Error "Command bus instance not set on constructor" unless @commandBus?
 
 module.exports = Entity

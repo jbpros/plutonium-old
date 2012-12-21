@@ -1,4 +1,5 @@
 module.exports =
+  AggregateRoot: require "./aggregate_root"
   CommandBus: require "./command_bus"
   DomainRepository: require "./domain_repository"
   Entity: require "./entity"
