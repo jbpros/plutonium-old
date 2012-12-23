@@ -13,15 +13,21 @@ class CommandBus
 
   executeCommand: (commandName, args..., callback) ->
     domainRepository = @domainRepository
+    logger           = @logger
     @getHandlerForCommand commandName, (err, commandHandler) ->
       return callback err if err?
 
       proceed = (callback) ->
         args.push callback
-        # let synchronous stuff happen so that events can be registered to in calling code:
-        process.nextTick ->
-          commandHandler.apply null, args
-      domainRepository.transact proceed, callback
+        commandHandler.apply null, args
+      # let synchronous stuff happen so that events can be registered to in calling code:
+      process.nextTick ->
+        domainRepository.transact proceed, (err) ->
+          if err?
+            logger.warn "CommandBus#executeCommand", "transaction failed (#{err})"
+          else
+            logger.debug "CommandBus#executeCommand", "transaction succeeded"
+      callback null
 
   getHandlerForCommand: (commandName, callback) ->
     commandHandler = @commandHandlers[commandName]

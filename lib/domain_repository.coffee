@@ -105,6 +105,11 @@ class DomainRepository
 
   # Listen for events before they are published to the event bus
   # Don't use this in reporters/reports! This is reserved for domain routines
+  #
+  # Options:
+  # * synchronous: Boolean - the event listener is considered synchronous, it will not receive any callbacks
+  # * once: Boolean - automatically unregisters the listener after one execution
+  # * forAggregateUid: String - the listener is executed only if the aggregate UID matches the given string
   onEvent: (eventName, options, listener) ->
     [eventName, options, listener] = [eventName, {}, options] if not listener?
 
@@ -112,8 +117,14 @@ class DomainRepository
     directListeners = @directListeners[eventName]
     directListenerIndex = directListeners.length
 
-    if options.once?
-      oneTimerListener = listener;
+    if options.synchronous
+      syncListener = listener
+      listener = (event, callback) ->
+        syncListener event
+        callback()
+
+    if options.once
+      oneTimerListener = listener
       listener = (event, callback) ->
         directListeners.splice directListenerIndex, 1
         oneTimerListener event, callback
