@@ -33,14 +33,16 @@ class DomainRepository
   createNewUid: (callback) ->
     @store.createNewUid callback
 
-  findAggregateByUid: (entityConstructor, uid, options, callback) ->
+  findAggregateByUid: (Entity, uid, options, callback) ->
     [options, callback] = [{}, options] unless callback?
+    callback new Error "Missing entity constructor" unless Entity?
+    callback new Error "Missing UID" unless uid?
 
     @store.findAllByAggregateUid uid, (err, events) ->
       if err?
         callback err
       else
-        entityConstructor.buildFromEvents events, callback
+        Entity.buildFromEvents events, callback
 
   replayAllEvents: (callback) ->
     @store.findAll loadBlobs: true, (err, events) =>
