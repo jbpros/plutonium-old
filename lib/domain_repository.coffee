@@ -57,7 +57,7 @@ class DomainRepository
     @aggregates.push aggregate
 
   commit: (callback) ->
-    return callback nill if @aggregates.length is 0
+    return callback null if @aggregates.length is 0
 
     committedEvents = []
 
