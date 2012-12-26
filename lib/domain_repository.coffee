@@ -14,13 +14,21 @@ class DomainRepository
 
   transact: (operation, callback) ->
     @logger.log "transaction", "starting"
+    # TODO: prevent parallel operation.
+    # Two solutions:
+    # 1. make it blocking, queue operations
+    # 2. isolate aggregates per transaction (how?)
     operation (err) =>
       if err?
         @logger.alert "transaction", "rolling back (#{err})"
-        @rollback callback
+        @rollback =>
+          @logger.log "transaction", "rolled back"
+          callback null
       else
         @logger.log "transaction", "comitting"
-        @commit callback
+        @commit =>
+          @logger.log "transaction", "committed"
+          callback null
 
   createNewUid: (callback) ->
     @store.createNewUid callback
