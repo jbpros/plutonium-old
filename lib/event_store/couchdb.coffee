@@ -34,7 +34,8 @@ class CouchDbEventStore extends EventStore
     unless callback?
       callback = options
       options  = {}
-
+    unless aggregateUid?
+      callback new Error "AggregateUid cannot be undefined"
     request
       uri: @_urlToDocument("_design/events/_view/byAggregate?key=\"#{aggregateUid}\"")
       json: {}
