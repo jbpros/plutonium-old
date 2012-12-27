@@ -107,10 +107,10 @@ class DomainRepository
 
   publishEvent: (event, callback) ->
     process.nextTick =>
-      @logger.log "publishEvent", "publishing #{event.name} from aggregate #{event.aggregateUid} to direct listeners"
+      @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to direct listeners"
       @_publishEventToDirectListeners event, (err) =>
         @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
-        @logger.log "publishEvent", "publishing #{event.name} from aggregate #{event.aggregateUid} to event bus"
+        @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to event bus"
         @emitter.emit event, (err) =>
           @logger.log "publishEvent", "event publication failed: #{err}" if err?
           callback err
