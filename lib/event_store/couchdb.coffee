@@ -28,6 +28,7 @@ class CouchDbEventStore extends EventStore
       else if body.error?
         throw new Error("Error: #{body.error} - #{body.reason}")
       else
+        return callback null, null unless body.rows?
         @_instantiateEventsFromRows body.rows, options, callback
 
   findAllByAggregateUid: (aggregateUid, options, callback) ->
@@ -42,6 +43,7 @@ class CouchDbEventStore extends EventStore
       if err?
         callback err
       else
+        return callback null, null unless body.rows?
         @_instantiateEventsFromRows body.rows, options, callback
 
   saveEvent: (event, callback) =>

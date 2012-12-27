@@ -43,6 +43,7 @@ class DomainRepository
       if err?
         callback err
       else
+        return callback null, null unless events?
         Entity.buildFromEvents events, callback
 
   replayAllEvents: (callback) ->
