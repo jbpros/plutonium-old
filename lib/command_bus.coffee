@@ -22,11 +22,7 @@ class CommandBus
         commandHandler.apply null, args
       # let synchronous stuff happen so that events can be registered to in calling code:
       process.nextTick ->
-        domainRepository.transact proceed, (err) ->
-          if err?
-            logger.warn "CommandBus#executeCommand", "transaction failed (#{err})"
-          else
-            logger.debug "CommandBus#executeCommand", "transaction succeeded"
+        domainRepository.transact proceed
       callback null
 
   getHandlerForCommand: (commandName, callback) ->

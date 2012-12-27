@@ -11,24 +11,25 @@ class DomainRepository
     throw new Error "Missing logger" unless @logger?
     @aggregates = []
     @directListeners = {}
+    @nextDirectListenerKey = 0
+    @transactionQueue = async.queue (transaction, done) =>
+      @logger.log "transaction", "starting"
+      transaction (err) =>
+        if err?
+          @logger.alert "transaction", "failed, rolling back (#{err})"
+          @rollback =>
+            @logger.log "transaction", "rolled back (#{@transactionQueue.length()} more transaction(s) in queue)"
+            done()
+        else
+          @logger.log "transaction", "succeeded, comitting"
+          @commit =>
+            @logger.log "transaction", "committed (#{@transactionQueue.length()} more transaction(s) in queue)"
+            done()
+    , 1
 
-  transact: (operation, callback) ->
-    @logger.log "transaction", "starting"
-    # TODO: prevent parallel operation.
-    # Two solutions:
-    # 1. make it blocking, queue operations
-    # 2. isolate aggregates per transaction (how?)
-    operation (err) =>
-      if err?
-        @logger.alert "transaction", "rolling back (#{err})"
-        @rollback =>
-          @logger.log "transaction", "rolled back"
-          callback null
-      else
-        @logger.log "transaction", "comitting"
-        @commit =>
-          @logger.log "transaction", "committed"
-          callback null
+  transact: (transaction) ->
+    @transactionQueue.push transaction
+    @logger.log "transaction", "queued (queue size: #{@transactionQueue.length()})"
 
   createNewUid: (callback) ->
     @store.createNewUid callback
@@ -105,10 +106,11 @@ class DomainRepository
     callback()
 
   publishEvent: (event, callback) ->
-    @logger.log "publishEvent", "#{event.name} for aggregate #{event.aggregateUid}"
     process.nextTick =>
+      @logger.log "publishEvent", "publishing #{event.name} from aggregate #{event.aggregateUid} to direct listeners"
       @_publishEventToDirectListeners event, (err) =>
         @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
+        @logger.log "publishEvent", "publishing #{event.name} from aggregate #{event.aggregateUid} to event bus"
         @emitter.emit event, (err) =>
           @logger.log "publishEvent", "event publication failed: #{err}" if err?
           callback err
@@ -122,10 +124,9 @@ class DomainRepository
   # * forAggregateUid: String - the listener is executed only if the aggregate UID matches the given string
   onEvent: (eventName, options, listener) ->
     [eventName, options, listener] = [eventName, {}, options] if not listener?
-
-    @directListeners[eventName] ?= []
+    @directListeners[eventName] ?= {}
     directListeners = @directListeners[eventName]
-    directListenerIndex = directListeners.length
+    directListenerKey = @nextDirectListenerKey++
 
     if options.synchronous
       syncListener = listener
@@ -136,7 +137,7 @@ class DomainRepository
     if options.once
       oneTimerListener = listener
       listener = (event, callback) ->
-        directListeners.splice directListenerIndex, 1
+        delete directListeners[directListenerKey]
         oneTimerListener event, callback
 
     if options.forAggregateUid?
@@ -147,16 +148,21 @@ class DomainRepository
         else
           callback null
 
-    directListeners.push listener
+    directListeners[directListenerKey] = listener
 
   _publishEventToDirectListeners: (event, callback) ->
     directListeners = @directListeners[event.name]
-    return callback null unless directListeners and directListeners.length > 0
+
     queue = async.queue (directListener, callback) ->
       directListener event, callback
     , Infinity
 
     queue.drain = callback
-    queue.push directListeners
+    queuedListeners = false
+    for _, directListener of directListeners
+      queuedListeners = true unless queuedListeners
+      queue.push directListener
+
+    callback null unless queuedListeners
 
 module.exports = DomainRepository
