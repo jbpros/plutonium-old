@@ -46,6 +46,8 @@ class DomainRepository
       @transactionQueue.drain = =>
         @transactionQueue.drain = null
         callback()
+    else
+      callback()
 
   acceptTransactions: (callback) ->
     @rejectingTransactions = false
