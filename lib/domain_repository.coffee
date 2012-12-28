@@ -9,27 +9,48 @@ class DomainRepository
     throw new Error "Missing store" unless @store?
     throw new Error "Missing event bus emitter" unless @emitter?
     throw new Error "Missing logger" unless @logger?
-    @aggregates = []
-    @directListeners = {}
-    @nextDirectListenerKey = 0
-    @transactionQueue = async.queue (transaction, done) =>
-      @logger.log "transaction", "starting"
-      transaction (err) =>
-        if err?
-          @logger.alert "transaction", "failed, rolling back (#{err})"
-          @rollback =>
-            @logger.log "transaction", "rolled back (#{@transactionQueue.length()} more transaction(s) in queue)"
-            done()
-        else
-          @logger.log "transaction", "succeeded, comitting"
-          @commit =>
-            @logger.log "transaction", "committed (#{@transactionQueue.length()} more transaction(s) in queue)"
-            done()
+    @aggregates             = []
+    @directListeners        = {}
+    @nextDirectListenerKey  = 0
+    @transacting            = false
+    @rejectingTransactions  = false
+    @transactionQueue       = async.queue (transaction, done) =>
+      if @rejectingTransactions
+        @logger.warning "transaction", "rejected (#{@transactionQueue.length()} more transaction(s) in queue)"
+        done()
+      else
+        @transacting = true
+        @logger.log "transaction", "starting"
+        transaction (err) =>
+          if err?
+            @logger.alert "transaction", "failed, rolling back (#{err})"
+            @rollback =>
+              @logger.log "transaction", "rolled back (#{@transactionQueue.length()} more transaction(s) in queue)"
+              @transacting = false
+              done()
+          else
+            @logger.log "transaction", "succeeded, comitting"
+            @commit =>
+              @logger.log "transaction", "committed (#{@transactionQueue.length()} more transaction(s) in queue)"
+              @transacting = false
+              done()
     , 1
 
   transact: (transaction) ->
     @transactionQueue.push transaction
     @logger.log "transaction", "queued (queue size: #{@transactionQueue.length()})"
+
+  rejectTransactions: (callback) ->
+    @rejectingTransactions = true
+    if @transacting || @transactionQueue.length() > 0
+      @transactionQueue.drain = =>
+        @transactionQueue.drain = null
+        callback()
+
+  acceptTransactions: (callback) ->
+    @rejectingTransactions = false
+    @transactionQueue.drain = null
+    callback()
 
   createNewUid: (callback) ->
     @store.createNewUid callback
