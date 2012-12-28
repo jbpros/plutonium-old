@@ -21,13 +21,11 @@ class Entity
     @constructor._checkDependencies()
     event = new Event eventName, attributes
     @applyEvent event, (err) =>
-      if err?
-        callback err
-      else
-        event.aggregateUid = @uid
-        @appliedEvents.push event
-        @domainRepository.add @
-        callback null
+      return callback err if err?
+      event.aggregateUid = @uid
+      @appliedEvents.push event
+      @domainRepository.add @
+      callback null
 
   applyEvent: (event, callback) ->
     @constructor._checkDependencies()
