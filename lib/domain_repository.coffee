@@ -9,12 +9,13 @@ class DomainRepository
     throw new Error "Missing store" unless @store?
     throw new Error "Missing event bus emitter" unless @emitter?
     throw new Error "Missing logger" unless @logger?
-    @aggregates             = []
-    @directListeners        = {}
-    @nextDirectListenerKey  = 0
-    @transacting            = false
-    @halted  = false
-    @transactionQueue       = async.queue (transaction, done) =>
+    @aggregates            = []
+    @directListeners       = {}
+    @nextDirectListenerKey = 0
+    @transacting           = false
+    @halted                = false
+    @silent                = false
+    @transactionQueue      = async.queue (transaction, done) =>
       if @halted
         @logger.warning "transaction", "skipped (#{@transactionQueue.length()} more transaction(s) in queue)"
         done()
@@ -40,8 +41,9 @@ class DomainRepository
     @transactionQueue.push transaction
     @logger.log "transaction", "queued (queue size: #{@transactionQueue.length()})"
 
-  halt: (callback) ->
+  halt: ({immediately}, callback) ->
     @halted = true
+    @silent = true if immediately
     if @transacting || @transactionQueue.length() > 0
       @transactionQueue.drain = =>
         @transactionQueue.drain = null
@@ -51,6 +53,7 @@ class DomainRepository
 
   resume: (callback) ->
     @halted = false
+    @silent = false
     @transactionQueue.drain = null
     callback()
 
@@ -170,7 +173,7 @@ class DomainRepository
       @_publishEventToDirectListeners event, (err) =>
         @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
         @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to event bus"
-        if @halted
+        if @silent
           callback()
         else
           @emitter.emit event, (err) =>
