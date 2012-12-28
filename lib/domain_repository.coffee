@@ -13,10 +13,10 @@ class DomainRepository
     @directListeners        = {}
     @nextDirectListenerKey  = 0
     @transacting            = false
-    @rejectingTransactions  = false
+    @halted  = false
     @transactionQueue       = async.queue (transaction, done) =>
-      if @rejectingTransactions
-        @logger.warning "transaction", "rejected (#{@transactionQueue.length()} more transaction(s) in queue)"
+      if @halted
+        @logger.warning "transaction", "skipped (#{@transactionQueue.length()} more transaction(s) in queue)"
         done()
       else
         @transacting = true
@@ -24,13 +24,13 @@ class DomainRepository
         transaction (err) =>
           if err?
             @logger.alert "transaction", "failed, rolling back (#{err})"
-            @rollback =>
+            @_rollback =>
               @logger.log "transaction", "rolled back (#{@transactionQueue.length()} more transaction(s) in queue)"
               @transacting = false
               done()
           else
             @logger.log "transaction", "succeeded, comitting"
-            @commit =>
+            @_commit =>
               @logger.log "transaction", "committed (#{@transactionQueue.length()} more transaction(s) in queue)"
               @transacting = false
               done()
@@ -40,8 +40,8 @@ class DomainRepository
     @transactionQueue.push transaction
     @logger.log "transaction", "queued (queue size: #{@transactionQueue.length()})"
 
-  rejectTransactions: (callback) ->
-    @rejectingTransactions = true
+  halt: (callback) ->
+    @halted = true
     if @transacting || @transactionQueue.length() > 0
       @transactionQueue.drain = =>
         @transactionQueue.drain = null
@@ -49,8 +49,8 @@ class DomainRepository
     else
       callback()
 
-  acceptTransactions: (callback) ->
-    @rejectingTransactions = false
+  resume: (callback) ->
+    @halted = false
     @transactionQueue.drain = null
     callback()
 
@@ -73,7 +73,7 @@ class DomainRepository
     @store.findAll loadBlobs: true, (err, events) =>
       if events.length > 0
         eventQueue = async.queue (event, eventTaskCallback) =>
-          @publishEvent event, eventTaskCallback
+          @_publishEvent event, eventTaskCallback
         , 1
         eventQueue.drain = callback
         eventQueue.push events
@@ -82,62 +82,6 @@ class DomainRepository
 
   add: (aggregate) ->
     @aggregates.push aggregate
-
-  commit: (callback) ->
-    return callback null if @aggregates.length is 0
-
-    committedEvents = []
-
-    aggregateQueue = async.queue (aggregate, aggregateTaskCallback) =>
-      firstEvent = aggregate.appliedEvents.shift()
-
-      if firstEvent?
-        queue = async.queue (event, eventTaskCallback) =>
-          nextEvent = aggregate.appliedEvents.shift()
-          queue.push nextEvent if nextEvent?
-
-          @logger.log "commit", "saving event \"#{event.name}\" for aggregate #{event.aggregateUid}"
-          @store.saveEvent event, (err, event) =>
-            if err?
-              eventTaskCallback err
-            else
-              committedEvents.push event
-              eventTaskCallback null
-        , 1
-
-        queue.drain = aggregateTaskCallback
-        queue.push [firstEvent]
-      else
-        aggregateTaskCallback null
-
-    , Infinity # TODO determine if it is safe to treat all aggregates in parallel?
-
-    aggregateQueue.drain = (err) =>
-      return callback err if err?
-      return callback null unless committedEvents.length > 0
-      publicationQueue = async.queue (event, publicationCallback) =>
-        @publishEvent event, publicationCallback
-      , Infinity
-      publicationQueue.drain = callback
-      publicationQueue.push committedEvents
-
-    aggregateQueue.push @aggregates
-    @aggregates = []
-
-  rollback: (callback) ->
-    @aggregates.forEach (aggregate) =>
-      aggregate.appliedEvents = []
-    callback()
-
-  publishEvent: (event, callback) ->
-    process.nextTick =>
-      @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to direct listeners"
-      @_publishEventToDirectListeners event, (err) =>
-        @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
-        @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to event bus"
-        @emitter.emit event, (err) =>
-          @logger.log "publishEvent", "event publication failed: #{err}" if err?
-          callback err
 
   # Listen for events before they are published to the event bus
   # Don't use this in reporters/reports! This is reserved for domain routines
@@ -173,6 +117,65 @@ class DomainRepository
           callback null
 
     directListeners[directListenerKey] = listener
+
+  _commit: (callback) ->
+    return callback null if @aggregates.length is 0
+
+    committedEvents = []
+
+    aggregateQueue = async.queue (aggregate, aggregateTaskCallback) =>
+      firstEvent = aggregate.appliedEvents.shift()
+
+      if firstEvent?
+        queue = async.queue (event, eventTaskCallback) =>
+          nextEvent = aggregate.appliedEvents.shift()
+          queue.push nextEvent if nextEvent?
+
+          @logger.log "commit", "saving event \"#{event.name}\" for aggregate #{event.aggregateUid}"
+          @store.saveEvent event, (err, event) =>
+            if err?
+              eventTaskCallback err
+            else
+              committedEvents.push event
+              eventTaskCallback null
+        , 1
+
+        queue.drain = aggregateTaskCallback
+        queue.push [firstEvent]
+      else
+        aggregateTaskCallback null
+
+    , Infinity # TODO determine if it is safe to treat all aggregates in parallel?
+
+    aggregateQueue.drain = (err) =>
+      return callback err if err?
+      return callback null unless committedEvents.length > 0
+      publicationQueue = async.queue (event, publicationCallback) =>
+        @_publishEvent event, publicationCallback
+      , Infinity
+      publicationQueue.drain = callback
+      publicationQueue.push committedEvents
+
+    aggregateQueue.push @aggregates
+    @aggregates = []
+
+  _rollback: (callback) ->
+    @aggregates.forEach (aggregate) =>
+      aggregate.appliedEvents = []
+    callback()
+
+  _publishEvent: (event, callback) ->
+    process.nextTick =>
+      @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to direct listeners"
+      @_publishEventToDirectListeners event, (err) =>
+        @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
+        @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to event bus"
+        if @halted
+          callback()
+        else
+          @emitter.emit event, (err) =>
+            @logger.log "publishEvent", "event publication failed: #{err}" if err?
+            callback err
 
   _publishEventToDirectListeners: (event, callback) ->
     directListeners = @directListeners[event.name]
