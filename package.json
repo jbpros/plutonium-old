@@ -1,7 +1,7 @@
 {
   "author": "Julien Biezemans <jb@jbpros.com>",
   "name": "plutonium",
-  "version": "0.0.0",
+  "version": "0.0.0-alpha",
   "description": "Infrastructure framework based on DDD, Event Sourcing and CQRS principles",
   "main": "lib/main",
   "scripts": {
@@ -34,5 +34,7 @@
       "url": "http://github.com/jbpros/plutonium/LICENSE"
     }
   ],
-  "private": true
+  "readmeFilename": "README.md",
+  "gitHead": "37a0defc7f7bb5857f50b27b9fd0fb38ff39179d",
+  "license": "MIT"
 }
