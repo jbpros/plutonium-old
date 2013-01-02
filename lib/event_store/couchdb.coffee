@@ -43,7 +43,7 @@ class CouchDbEventStore extends EventStore
       if err?
         callback err
       else
-        return callback null, null unless body.rows?
+        return callback null, null unless body.rows? and body.rows.length > 0
         @_instantiateEventsFromRows body.rows, options, callback
 
   saveEvent: (event, callback) =>
