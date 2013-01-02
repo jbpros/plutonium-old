@@ -180,6 +180,6 @@ class CouchDbEventStore extends EventStore
         else if body.ok
           callback null
         else
-          callback new Error "Couldn't create view; unknown reason (#{body.error})"
+          callback new Error "Couldn't create view; error <#{body.error}>; reason <#{body.reason}>"
 
 module.exports = CouchDbEventStore
