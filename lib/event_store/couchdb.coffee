@@ -1,13 +1,14 @@
-async       = require "async"
-uuid        = require "node-uuid"
-request     = require "request"
-Event       = require "../event"
-EventStore  = require "../event_store"
-http        = require "http"
-url         = require "url"
+async        = require "async"
+uuid         = require "node-uuid"
+Event        = require "../event"
+EventStore   = require "../event_store"
+http         = require "http"
+url          = require "url"
+request      = require "./utils/request"
 
 class CouchDbEventStore extends EventStore
-  constructor: (@uri) ->
+  constructor: (uri) ->
+    @uri = url.parse(uri)
 
   setup: (callback) =>
     async.series [@_setupDatabase, @_setupViews], callback
@@ -21,13 +22,9 @@ class CouchDbEventStore extends EventStore
       callback = options
       options  = {}
 
-    request
-      uri: @_urlToDocument("_design/events/_view/byTimestamp?attachments=true")
-      json: {}
-    , (err, response, body) =>
-      if err? # todo: improve errors
-        throw err
-      else if body.error?
+    request.get @_urlToDocument("_design/events/_view/byTimestamp?attachments=true"), true, (err, body) ->
+      return callback err if err?
+      if body.error?
         throw new Error("Error: #{body.error} - #{body.reason}")
       else
         return callback null, null unless body.rows?
@@ -38,18 +35,10 @@ class CouchDbEventStore extends EventStore
       callback = options
       options  = {}
 
-    http.get @_urlToDocument("_design/events/_view/byAggregate?key=\"#{aggregateUid}\""), (res) =>
-      res.on "error", (err) ->
-        callback err
-
-      body = ""
-      res.on "data", (chunk) ->
-        body += chunk
-      
-      res.on "end", =>
-        body = JSON.parse body
-        return callback null, null unless body.rows? and body.rows.length > 0
-        @_instantiateEventsFromRows body.rows, options, callback
+    request.get @_urlToDocument("_design/events/_view/byAggregate?key=\"#{aggregateUid}\""), true, (err, body) =>
+      return callback err if err?
+      return callback null, null unless body.rows? and body.rows.length > 0
+      @_instantiateEventsFromRows body.rows, options, callback
 
   saveEvent: (event, callback) =>
     @createNewUid (err, eventUid) =>
@@ -72,21 +61,27 @@ class CouchDbEventStore extends EventStore
         else
           payload['data'][key] = value
 
-      request
-        method: "put"
-        uri:    @_urlToDocument(eventUid)
-        json:   payload
-      , (err, response, body) ->
-          if err? or not body.ok
-            callback err or new Error("Couldn't persist event (#{body.error} - #{body.reason})")
-          else
-            callback null, event
+
+      options =
+        payload: payload
+        hostname: @uri.hostname
+        path: @_pathToDocument(eventUid)
+        port: @uri.port
+
+      request.put options, true, (err, body) ->
+        if err? or not body.ok
+          callback err or new Error("Couldn't persist event (#{body.error} - #{body.reason})")
+        else
+          callback null, event
 
   _urlToDocumentAttachment: (document, attachment) ->
     "#{@_urlToDocument document}/#{attachment}"
 
   _urlToDocument: (document) ->
-    "#{@uri}/#{document}"
+    "#{@uri.href}/#{document}"
+
+  _pathToDocument: (document) ->
+    "#{@uri.path}/#{document}"
 
   _instantiateEventsFromRows: (rows, options, callback) ->
     [options, callback] = [{}, options] unless callback?
@@ -113,10 +108,8 @@ class CouchDbEventStore extends EventStore
 
       if options.loadBlobs and attachments?
         attachmentsQueue = async.queue (attachment, attachmentCallback) =>
-          request
-            uri: @_urlToDocumentAttachment uid, attachment
-            encoding: null # i.e. buffer
-          , (err, response, body) =>
+          
+          request @_urlToDocumentAttachment(uid, attachment), true, (err, body) ->
             if err? # todo: improve errors
               throw err
             else if body.error?
@@ -141,46 +134,19 @@ class CouchDbEventStore extends EventStore
     rowsQueue.push rows
 
   _setupDatabase: (callback) =>
-    couchUri = url.parse @uri
-    req = http.request
-      method: "DELETE"
-      hostname: couchUri.hostname
-      path: couchUri.path
-      port: couchUri.port
-    , (res) ->
-      res.on "error", (err) ->
-        callback err
+    options = 
+      hostname: @uri.hostname
+      path: @uri.path
+      port: @uri.port
 
-      res.on "end", =>
-        putRequest = http.request
-          method: "PUT"
-          hostname: couchUri.hostname
-          path: couchUri.path
-          port: couchUri.port
-        , (res) ->
-          res.on "error", ->
-            callback err
-
-          body = ""
-          res.on "data", (chunk) ->
-            body += chunk
-
-          res.on "end", ->
-            body = JSON.parse body
-            if body.ok or (not body.ok and body.error is "file_exists")
-              callback null
-            else
-              callback new Error "Couldn't create database; unknown reason (#{body})"
-        
-        putRequest.on "error", (err) ->
-          callback err
-
-        putRequest.end()
-
-    req.on "error", (err) ->
-      callback err
-
-    req.end()
+    request.del options, (err, body) ->
+      return callback err if err?
+      request.put options, true, (err, body) ->
+        return callback err if err?
+        if body.ok or (not body.ok and body.error is "file_exists")
+          callback null
+        else
+          callback new Error "Couldn't create database; unknown reason (#{body})"
 
   _setupViews: (callback) =>
     async.parallel [
@@ -199,16 +165,18 @@ class CouchDbEventStore extends EventStore
     ], callback
 
   _setupView: (document, view, callback) =>
-    request
-      method: "put"
-      uri:    @_urlToDocument(document)
-      json:  view
-    , (err, response, body) ->
-        if err?
-          callback err
-        else if body.ok
-          callback null
-        else
-          callback new Error "Couldn't create view; error <#{body.error}>; reason <#{body.reason}>"
+    options =
+      payload: view
+      hostname: @uri.hostname
+      path: @_pathToDocument(document)
+      port: @uri.port
+
+    request.put options, true, (err, body) ->
+      if err?
+        callback err
+      else if body.ok
+        callback null
+      else
+        callback new Error "Couldn't create view; error <#{body.error}>; reason <#{body.reason}>"
 
 module.exports = CouchDbEventStore
