@@ -33,7 +33,7 @@ class Entity
 
     @constructor._checkDependencies()
     eventHandlers = Entity.eventHandlers[event.name] || []
-
+    return callback null if eventHandlers.length is 0
     pending = 0
     errors = []
     for eventHandler in eventHandlers
