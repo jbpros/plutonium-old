@@ -3,6 +3,8 @@ uuid        = require "node-uuid"
 request     = require "request"
 Event       = require "../event"
 EventStore  = require "../event_store"
+http        = require "http"
+url         = require "url"
 
 class CouchDbEventStore extends EventStore
   constructor: (@uri) ->
@@ -36,13 +38,16 @@ class CouchDbEventStore extends EventStore
       callback = options
       options  = {}
 
-    request
-      uri: @_urlToDocument("_design/events/_view/byAggregate?key=\"#{aggregateUid}\"")
-      json: {}
-    , (err, response, body) =>
-      if err?
+    http.get @_urlToDocument("_design/events/_view/byAggregate?key=\"#{aggregateUid}\""), (res) =>
+      res.on "error", (err) ->
         callback err
-      else
+
+      body = ""
+      res.on "data", (chunk) ->
+        body += chunk
+      
+      res.on "end", =>
+        body = JSON.parse body
         return callback null, null unless body.rows? and body.rows.length > 0
         @_instantiateEventsFromRows body.rows, options, callback
 
@@ -136,22 +141,46 @@ class CouchDbEventStore extends EventStore
     rowsQueue.push rows
 
   _setupDatabase: (callback) =>
-    request
-      method: "delete"
-      uri: @uri
-      json: {}
-    , =>
-      request
-        method: "put"
-        uri:    @uri
-        json:   {}
-      , (err, response, body) ->
-          if err?
+    couchUri = url.parse @uri
+    req = http.request
+      method: "DELETE"
+      hostname: couchUri.hostname
+      path: couchUri.path
+      port: couchUri.port
+    , (res) ->
+      res.on "error", (err) ->
+        callback err
+
+      res.on "end", =>
+        putRequest = http.request
+          method: "PUT"
+          hostname: couchUri.hostname
+          path: couchUri.path
+          port: couchUri.port
+        , (res) ->
+          res.on "error", ->
             callback err
-          else if body.ok or (not body.ok and body.error is "file_exists")
-            callback null
-          else
-            callback new Error "Couldn't create database; unknown reason (#{body})"
+
+          body = ""
+          res.on "data", (chunk) ->
+            body += chunk
+
+          res.on "end", ->
+            body = JSON.parse body
+            if body.ok or (not body.ok and body.error is "file_exists")
+              callback null
+            else
+              callback new Error "Couldn't create database; unknown reason (#{body})"
+        
+        putRequest.on "error", (err) ->
+          callback err
+
+        putRequest.end()
+
+    req.on "error", (err) ->
+      callback err
+
+    req.end()
 
   _setupViews: (callback) =>
     async.parallel [
