@@ -4,7 +4,7 @@ Event        = require "../event"
 EventStore   = require "../event_store"
 http         = require "http"
 url          = require "url"
-request      = require "./utils/request"
+request      = require "./couchdb/request"
 
 class CouchDbEventStore extends EventStore
   constructor: (uri) ->
@@ -108,7 +108,7 @@ class CouchDbEventStore extends EventStore
 
       if options.loadBlobs and attachments?
         attachmentsQueue = async.queue (attachment, attachmentCallback) =>
-          
+
           request @_urlToDocumentAttachment(uid, attachment), true, (err, body) ->
             if err? # todo: improve errors
               throw err
@@ -134,7 +134,7 @@ class CouchDbEventStore extends EventStore
     rowsQueue.push rows
 
   _setupDatabase: (callback) =>
-    options = 
+    options =
       hostname: @uri.hostname
       path: @uri.path
       port: @uri.port
