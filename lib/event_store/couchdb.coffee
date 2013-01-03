@@ -1,14 +1,14 @@
+url          = require "url"
 async        = require "async"
 uuid         = require "node-uuid"
 Event        = require "../event"
 EventStore   = require "../event_store"
-http         = require "http"
-url          = require "url"
 request      = require "./couchdb/request"
+Profiler    = require "../profiler"
 
 class CouchDbEventStore extends EventStore
-  constructor: (uri) ->
-    @uri = url.parse(uri)
+  constructor: ({@uri, @logger}) ->
+    @uri = url.parse(@uri)
 
   setup: (callback) =>
     async.series [@_setupDatabase, @_setupViews], callback
@@ -35,7 +35,10 @@ class CouchDbEventStore extends EventStore
       callback = options
       options  = {}
 
-    request.get @_urlToDocument("_design/events/_view/byAggregate?key=\"#{aggregateUid}\""), true, (err, body) =>
+    p = new Profiler "CouchDbEventStore#findAllByAggregateUid(db request)", @logger
+    p.start()
+    request.get @_urlToDocument("_design/events/_view/byAggregate?startkey=[\"#{aggregateUid}\"]&endkey=[\"#{aggregateUid}\",{}]"), true, (err, body) =>
+      p.end()
       return callback err if err?
       return callback null, null unless body.rows? and body.rows.length > 0
       @_instantiateEventsFromRows body.rows, options, callback
@@ -86,9 +89,6 @@ class CouchDbEventStore extends EventStore
   _instantiateEventsFromRows: (rows, options, callback) ->
     [options, callback] = [{}, options] unless callback?
     options.loadBlobs ?= false
-
-    rows = rows.sort (a, b) ->
-      a.value.timestamp - b.value.timestamp
 
     events = []
     rowsQueue = async.queue (row, rowCallback) =>
@@ -155,7 +155,7 @@ class CouchDbEventStore extends EventStore
           language: "coffeescript"
           views:
             byAggregate:
-              map: "(doc) -> if doc.aggregateUid? then emit doc.aggregateUid, doc"
+              map: "(doc) -> if doc.aggregateUid? then emit [doc.aggregateUid, doc.timestamp], doc"
             byAggregateEventCount:
               map: "(doc) -> if doc.aggregateUid? then emit doc.aggregateUid, 1"
               reduce: "_sum"

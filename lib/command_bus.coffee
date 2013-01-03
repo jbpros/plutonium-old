@@ -1,4 +1,5 @@
 DomainRepository = require "./domain_repository"
+Profiler         = require "./profiler"
 
 class CommandBus
 
@@ -18,11 +19,13 @@ class CommandBus
       return callback err if err?
 
       proceed = (callback) ->
-        args.push callback
+        p = new Profiler "CommandBus#executeCommand(command execution)", logger
+        args.push (args...) ->
+          p.end()
+          callback args...
+        p.start()
         commandHandler.apply null, args
-      # let synchronous stuff happen so that events can be registered to in calling code:
-      process.nextTick ->
-        domainRepository.transact proceed
+      domainRepository.transact proceed
       callback null
 
   getHandlerForCommand: (commandName, callback) ->
