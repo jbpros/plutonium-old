@@ -1,4 +1,5 @@
-async = require "async"
+async    = require "async"
+Profiler = require "./profiler"
 
 COUCHDB_STORE = "couchdb"
 REDIS_STORE   = "redis"
@@ -22,7 +23,10 @@ class DomainRepository
       else
         @transacting = true
         @logger.log "transaction", "starting"
+        p = new Profiler "DomainRepository(transactionQueue.operation)", @logger
+        p.start()
         transaction (err) =>
+          p.end()
           if err?
             @logger.alert "transaction", "failed, rolling back (#{err})"
             @_rollback =>

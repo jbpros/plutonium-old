@@ -26,7 +26,8 @@
     "redis": "~0.7.1",
     "hiredis": "~0.1.14",
     "nano": "3.3.0",
-    "devnull": "0.0.10"
+    "devnull": "0.0.10",
+    "microtime": "~0.3.3"
   },
   "licenses": [
     {

@@ -1,6 +1,7 @@
-Q                = require 'q'
-async            = require 'async'
-Event            = require './event'
+Q        = require 'q'
+async    = require 'async'
+Event    = require './event'
+Profiler = require "./profiler"
 
 class Entity
 
@@ -28,18 +29,23 @@ class Entity
       callback null
 
   applyEvent: (event, callback) ->
+    logger = @logger
+
     @constructor._checkDependencies()
     eventHandlers = Entity.eventHandlers[event.name] || []
-    deferredEventHandlers = []
-    eventHandlers.forEach (eventHandler) =>
-      deferredEventHandler = Q.defer()
-      deferredEventHandlers.push deferredEventHandler.promise
-      eventHandler.call @, event, deferredEventHandler.makeNodeResolver()
 
-    deferred = Q.all(deferredEventHandlers)
-    deferred.then ->
-      callback null
-    , callback
+    pending = 0
+    errors = []
+    for eventHandler in eventHandlers
+      pending++
+      eventHandler.call @, event, (err) ->
+        if err?
+          logger.error "Entity#applyEvent", "a handler failed: #{err}"
+          errors.push err
+        pending--
+        if pending is 0
+          error = if errors.length > 0 then new Error "Some event handler(s) failed" else null
+          callback error
 
   @initialize: (options) =>
     throw new Error "Missing domain repository" unless options.domainRepository?
@@ -56,14 +62,25 @@ class Entity
   @buildFromEvents: (events, callback) ->
     @_checkDependencies()
     entity = new @
-    queue = async.queue (event, eventTaskCallback) ->
-      entity.applyEvent event, (err) ->
-        throw err if err? # todo: don't throw, callback with error (with Q.all()) (or not...)
-        eventTaskCallback()
-    , 1
-    queue.drain = ->
-      callback null, entity # todo ensure errors from handlers are passed here
-    queue.push events
+    p = new Profiler "Entity.buildFromEvents(#{events.length} events)", @logger
+    _t = 0
+    i = 0
+    p.start()
+    processNextEvent = =>
+      event = events[i++]
+      if event?
+        p1 = new Profiler "Entity.buildFromEvents(single event)", @logger
+        p1.start()
+        entity.applyEvent event, (err) ->
+          p1.end(silent: true)
+          _t += p1.spent
+          return callback err if err?
+          process.nextTick processNextEvent
+      else
+        p.end()
+        Entity.logger.debug "profiler", "spent #{_t}µs playing events"
+        callback null, entity
+    processNextEvent()
 
   @createNewUid: (callback) =>
     @_checkDependencies()

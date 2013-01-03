@@ -37,10 +37,14 @@ class CouchDbEventStore extends EventStore
       callback = options
       options  = {}
 
+    p = new Profiler "CouchDbEventStore#findAllByAggregateUid(db request)", @logger
+    p.start()
+
     request
       uri: @_urlToDocument("_design/events/_view/byAggregate?key=\"#{aggregateUid}\"")
       json: {}
     , (err, response, body) =>
+      p.end()
       if err?
         callback err
       else
