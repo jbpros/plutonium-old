@@ -19,7 +19,7 @@ class CommandBus
       return callback err if err?
 
       proceed = (callback) ->
-        p = new Profiler "CommandBus#executeCommand(command execution)", @logger
+        p = new Profiler "CommandBus#executeCommand(command execution)", logger
         args.push (args...) ->
           p.end()
           callback args...

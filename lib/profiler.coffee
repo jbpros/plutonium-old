@@ -2,7 +2,7 @@ microtime = require "microtime"
 
 class Profiler
   constructor: (@subject, @logger) ->
-    @logger ?= global.app?.logger
+    throw new Error "Missing logger" unless @logger
 
   start: (subject) ->
     this.startTime = microtime.now()

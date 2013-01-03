@@ -62,14 +62,14 @@ class Entity
   @buildFromEvents: (events, callback) ->
     @_checkDependencies()
     entity = new @
-    p = new Profiler "Entity.buildFromEvents(#{events.length} events)", @logger
+    p = new Profiler "Entity.buildFromEvents(#{events.length} events)", Entity.logger
     _t = 0
     i = 0
     p.start()
     processNextEvent = =>
       event = events[i++]
       if event?
-        p1 = new Profiler "Entity.buildFromEvents(single event)", @logger
+        p1 = new Profiler "Entity.buildFromEvents(single event)", Entity.logger
         p1.start()
         entity.applyEvent event, (err) ->
           p1.end(silent: true)
