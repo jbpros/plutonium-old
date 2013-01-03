@@ -3,9 +3,10 @@ uuid        = require "node-uuid"
 request     = require "request"
 Event       = require "../event"
 EventStore  = require "../event_store"
+Profiler    = require "../profiler"
 
 class CouchDbEventStore extends EventStore
-  constructor: (@uri) ->
+  constructor: ({@uri, @logger}) ->
 
   setup: (callback) =>
     async.series [@_setupDatabase, @_setupViews], callback
