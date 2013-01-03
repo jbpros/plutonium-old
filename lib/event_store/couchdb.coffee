@@ -41,7 +41,7 @@ class CouchDbEventStore extends EventStore
     p.start()
 
     request
-      uri: @_urlToDocument("_design/events/_view/byAggregate?key=\"#{aggregateUid}\"")
+      uri: @_urlToDocument("_design/events/_view/byAggregate?startkey=[\"#{aggregateUid}\"]&endkey=[\"#{aggregateUid}\",{}]")
       json: {}
     , (err, response, body) =>
       p.end()
@@ -91,9 +91,6 @@ class CouchDbEventStore extends EventStore
   _instantiateEventsFromRows: (rows, options, callback) ->
     [options, callback] = [{}, options] unless callback?
     options.loadBlobs ?= false
-
-    rows = rows.sort (a, b) ->
-      a.value.timestamp - b.value.timestamp
 
     events = []
     rowsQueue = async.queue (row, rowCallback) =>
@@ -165,7 +162,7 @@ class CouchDbEventStore extends EventStore
           language: "coffeescript"
           views:
             byAggregate:
-              map: "(doc) -> if doc.aggregateUid? then emit doc.aggregateUid, doc"
+              map: "(doc) -> if doc.aggregateUid? then emit [doc.aggregateUid, doc.timestamp], doc"
             byAggregateEventCount:
               map: "(doc) -> if doc.aggregateUid? then emit doc.aggregateUid, 1"
               reduce: "_sum"
