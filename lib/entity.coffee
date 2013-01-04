@@ -1,6 +1,5 @@
-Q        = require 'q'
-async    = require 'async'
-Event    = require './event'
+async    = require "async"
+Event    = require "./event"
 Profiler = require "./profiler"
 
 class Entity
