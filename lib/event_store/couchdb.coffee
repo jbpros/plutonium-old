@@ -3,8 +3,8 @@ async        = require "async"
 uuid         = require "node-uuid"
 Event        = require "../event"
 EventStore   = require "../event_store"
-request      = require "./couchdb/request"
-Profiler    = require "../profiler"
+beg          = require "beg"
+Profiler     = require "../profiler"
 
 class CouchDbEventStore extends EventStore
   constructor: ({@uri, @logger}) ->
@@ -22,7 +22,7 @@ class CouchDbEventStore extends EventStore
       callback = options
       options  = {}
 
-    request.get @_urlToDocument("_design/events/_view/byTimestamp?attachments=true"), true, (err, body) ->
+    beg.get @_urlToDocument("_design/events/_view/byTimestamp?attachments=true"), true, (err, body) ->
       return callback err if err?
       if body.error?
         throw new Error("Error: #{body.error} - #{body.reason}")
@@ -37,7 +37,7 @@ class CouchDbEventStore extends EventStore
 
     p = new Profiler "CouchDbEventStore#findAllByAggregateUid(db request)", @logger
     p.start()
-    request.get @_urlToDocument("_design/events/_view/byAggregate?startkey=[\"#{aggregateUid}\"]&endkey=[\"#{aggregateUid}\",{}]"), true, (err, body) =>
+    beg.get @_urlToDocument("_design/events/_view/byAggregate?startkey=[\"#{aggregateUid}\"]&endkey=[\"#{aggregateUid}\",{}]"), true, (err, body) =>
       p.end()
       return callback err if err?
       return callback null, null unless body.rows? and body.rows.length > 0
@@ -71,7 +71,7 @@ class CouchDbEventStore extends EventStore
         path: @_pathToDocument(eventUid)
         port: @uri.port
 
-      request.put options, true, (err, body) ->
+      beg.put options, true, (err, body) ->
         if err? or not body.ok
           callback err or new Error("Couldn't persist event (#{body.error} - #{body.reason})")
         else
@@ -109,7 +109,7 @@ class CouchDbEventStore extends EventStore
       if options.loadBlobs and attachments?
         attachmentsQueue = async.queue (attachment, attachmentCallback) =>
 
-          request @_urlToDocumentAttachment(uid, attachment), true, (err, body) ->
+          beg.get @_urlToDocumentAttachment(uid, attachment), true, (err, body) ->
             if err? # todo: improve errors
               throw err
             else if body.error?
@@ -139,9 +139,9 @@ class CouchDbEventStore extends EventStore
       path: @uri.path
       port: @uri.port
 
-    request.del options, (err, body) ->
+    beg.del options, (err, body) ->
       return callback err if err?
-      request.put options, true, (err, body) ->
+      beg.put options, true, (err, body) ->
         return callback err if err?
         if body.ok or (not body.ok and body.error is "file_exists")
           callback null
@@ -171,7 +171,7 @@ class CouchDbEventStore extends EventStore
       path: @_pathToDocument(document)
       port: @uri.port
 
-    request.put options, true, (err, body) ->
+    beg.put options, true, (err, body) ->
       if err?
         callback err
       else if body.ok
