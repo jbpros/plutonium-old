@@ -72,12 +72,13 @@ class DomainRepository
     @store.findAllByAggregateUid uid, (err, events) ->
       if err?
         callback err
+      else if events.length is 0
+        callback null, null
       else
-        return callback null, null unless events?
         Entity.buildFromEvents events, callback
 
   replayAllEvents: (callback) ->
-    @store.findAll loadBlobs: true, (err, events) =>
+    @store.findAll (err, events) =>
       if events.length > 0
         eventQueue = async.queue (event, eventTaskCallback) =>
           @_publishEvent event, eventTaskCallback

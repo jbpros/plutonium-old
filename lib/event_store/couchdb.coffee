@@ -1,54 +1,62 @@
-url          = require "url"
-async        = require "async"
-uuid         = require "node-uuid"
-Event        = require "../event"
-EventStore   = require "../event_store"
-request      = require "./couchdb/request"
-Profiler    = require "../profiler"
+url        = require "url"
+async      = require "async"
+uuid       = require "node-uuid"
+nano       = require "nano"
+Event      = require "../event"
+EventStore = require "../event_store"
+Profiler   = require "../profiler"
 
 class CouchDbEventStore extends EventStore
+
   constructor: ({@uri, @logger}) ->
-    @uri = url.parse(@uri)
+    throw new Error "Missing URI" unless @uri
+    throw new Error "Missing logger" unless @logger
+    uri = url.parse @uri
+    @host     = "#{uri.protocol}//#{uri.host}"
+    @database = uri.pathname.replace('/', '')
+    @server   = nano @host
+    @db       = @server.use @database
 
   setup: (callback) =>
-    async.series [@_setupDatabase, @_setupViews], callback
+    async.waterfall [
+      (next) =>
+        @server.db.destroy @database, (err) =>
+          err = null if err? and err.status_code is 404
+          next err
+      (next) =>
+        @server.db.create @database, (err) =>
+          next err
+      (next) =>
+        eventViews =
+          language: "coffeescript"
+          views:
+            byAggregate:
+              map: "(doc) -> if doc.aggregateUid? then emit [doc.aggregateUid, doc.timestamp], doc"
+            #byAggregateEventCount:
+            #  map: "(doc) -> if doc.aggregateUid? then emit doc.aggregateUid, 1"
+            #  reduce: "_sum"
+            byTimestamp:
+              map: "(doc) -> if doc.aggregateUid? then emit doc.timestamp, doc"
+        @db.insert eventViews, "_design/events", (err) =>
+          next err
+    ], (err) =>
+      callback err
 
   createNewUid: (callback) ->
     uid = uuid.v4()
     callback null, uid
 
-  findAll: (options, callback) ->
-    unless callback?
-      callback = options
-      options  = {}
+  findAll: (callback) ->
+    @_find "byTimestamp", {}, callback
 
-    request.get @_urlToDocument("_design/events/_view/byTimestamp?attachments=true"), true, (err, body) ->
-      return callback err if err?
-      if body.error?
-        throw new Error("Error: #{body.error} - #{body.reason}")
-      else
-        return callback null, null unless body.rows?
-        @_instantiateEventsFromRows body.rows, options, callback
-
-  findAllByAggregateUid: (aggregateUid, options, callback) ->
-    unless callback?
-      callback = options
-      options  = {}
-
-    p = new Profiler "CouchDbEventStore#findAllByAggregateUid(db request)", @logger
-    p.start()
-    request.get @_urlToDocument("_design/events/_view/byAggregate?startkey=[\"#{aggregateUid}\"]&endkey=[\"#{aggregateUid}\",{}]"), true, (err, body) =>
-      p.end()
-      return callback err if err?
-      return callback null, null unless body.rows? and body.rows.length > 0
-      @_instantiateEventsFromRows body.rows, options, callback
+  findAllByAggregateUid: (aggregateUid, callback) ->
+    @_find "byAggregate", { startkey: [aggregateUid], endkey: [aggregateUid, {}] }, callback
 
   saveEvent: (event, callback) =>
     @createNewUid (err, eventUid) =>
+      return callback err if err?
       event.uid = eventUid
-
       payload =
-        uid: event.uid
         name: event.name
         aggregateUid: event.aggregateUid
         timestamp: Date.now()
@@ -64,68 +72,42 @@ class CouchDbEventStore extends EventStore
         else
           payload['data'][key] = value
 
+      @db.insert payload, eventUid, (err, body) ->
+        return callback err if err?
+        callback null, event
 
-      options =
-        payload: payload
-        hostname: @uri.hostname
-        path: @_pathToDocument(eventUid)
-        port: @uri.port
+  _find: (view, params, callback) ->
+    p = new Profiler "CouchDbEventStore#_find(db request)", @logger
+    p.start()
+    @db.view "events", view, params, (err, body) =>
+      p.end()
+      if err?
+        callback err
+      else if not body.rows?
+        callback null, []
+      else
+        @_instantiateEventsFromRows body.rows, callback
 
-      request.put options, true, (err, body) ->
-        if err? or not body.ok
-          callback err or new Error("Couldn't persist event (#{body.error} - #{body.reason})")
-        else
-          callback null, event
-
-  _urlToDocumentAttachment: (document, attachment) ->
-    "#{@_urlToDocument document}/#{attachment}"
-
-  _urlToDocument: (document) ->
-    "#{@uri.href}/#{document}"
-
-  _pathToDocument: (document) ->
-    "#{@uri.path}/#{document}"
-
-  _instantiateEventsFromRows: (rows, options, callback) ->
-    [options, callback] = [{}, options] unless callback?
-    options.loadBlobs ?= false
-
+  _instantiateEventsFromRows: (rows, callback) ->
     events = []
+    return callback null, events if rows.length is 0
+
     rowsQueue = async.queue (row, rowCallback) =>
       value        = row.value
+      uid          = row.id
       name         = value.name
-      uid          = value.uid
       aggregateUid = value.aggregateUid
       data         = value.data
-      attachments  = value._attachments
 
-      pushEvent = (callback) ->
+      @_loadAttachmentsFromRow row, (err, attachments) ->
+        return rowCallback err if err?
+        for attachmentName, attachment of attachments
+          data[attachmentName] = attachment
         event              = new Event name, data
         event.uid          = uid
         event.aggregateUid = aggregateUid
         events.push event
-        callback()
-
-      if options.loadBlobs and attachments?
-        attachmentsQueue = async.queue (attachment, attachmentCallback) =>
-
-          request @_urlToDocumentAttachment(uid, attachment), true, (err, body) ->
-            if err? # todo: improve errors
-              throw err
-            else if body.error?
-              throw new Error("Error: #{body.error} - #{body.reason}")
-            else
-              data[attachment] = body
-              attachmentCallback()
-        , 1
-
-        attachmentsQueue.drain = ->
-          pushEvent rowCallback
-
-        for k, _ of attachments
-          attachmentsQueue.push k
-      else
-        pushEvent rowCallback
+        rowCallback()
     , 1
 
     rowsQueue.drain = ->
@@ -133,50 +115,31 @@ class CouchDbEventStore extends EventStore
 
     rowsQueue.push rows
 
-  _setupDatabase: (callback) =>
-    options =
-      hostname: @uri.hostname
-      path: @uri.path
-      port: @uri.port
+  _loadAttachmentsFromRow: (row, callback) ->
+    logger      = @logger
+    remaining   = Object.keys(row.value._attachments or {}).length
+    attachments = {}
+    errors      = []
+    if remaining is 0
+      return callback null, attachments
 
-    request.del options, (err, body) ->
-      return callback err if err?
-      request.put options, true, (err, body) ->
-        return callback err if err?
-        if body.ok or (not body.ok and body.error is "file_exists")
-          callback null
-        else
-          callback new Error "Couldn't create database; unknown reason (#{body})"
-
-  _setupViews: (callback) =>
-    async.parallel [
-      (callback) =>
-        @_setupView "_design/events",
-          language: "coffeescript"
-          views:
-            byAggregate:
-              map: "(doc) -> if doc.aggregateUid? then emit [doc.aggregateUid, doc.timestamp], doc"
-            byAggregateEventCount:
-              map: "(doc) -> if doc.aggregateUid? then emit doc.aggregateUid, 1"
-              reduce: "_sum"
-            byTimestamp:
-              map: "(doc) -> if doc.aggregateUid? then emit doc.timestamp, doc"
-        , callback
-    ], callback
-
-  _setupView: (document, view, callback) =>
-    options =
-      payload: view
-      hostname: @uri.hostname
-      path: @_pathToDocument(document)
-      port: @uri.port
-
-    request.put options, true, (err, body) ->
+    attachmentCallback = (err, attachmentName, body) ->
       if err?
-        callback err
-      else if body.ok
-        callback null
+        errors.push err
+        logger.error "CouchDbEventStore#_loadAttachmentsFromRow", "Error while loading attachment \"#{attachmentName}\": #{err}"
       else
-        callback new Error "Couldn't create view; error <#{body.error}>; reason <#{body.reason}>"
+        attachments[attachmentName] = body
+
+      remaining--
+      if remaining is 0
+        if errors.length > 0
+          callback new Error "An error occured while loading attachments"
+        else
+          callback null, attachments
+
+    for attachmentName of row.value._attachments
+      @db.attachment.get row.id, attachmentName, (err, body) ->
+        attachmentCallback err, attachmentName, body
+
 
 module.exports = CouchDbEventStore
