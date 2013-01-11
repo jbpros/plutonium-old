@@ -1,6 +1,6 @@
 Logger = require "devnull"
 
-logLevel = process.env.LOG_LEVEL ? 3
+logLevel = process.env.LOG_LEVEL ? 6
 logger = new Logger timestamp: false, level: logLevel
 
 logger.http = (req, res, next) ->
