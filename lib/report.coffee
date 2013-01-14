@@ -4,6 +4,9 @@ class Report
   get: (attributeName) ->
     @attributes[attributeName]
 
+  getAttributes: ->
+    @attributes
+
   toJSON: (options = {}) ->
     attributes = {}
     for k, v of @attributes
