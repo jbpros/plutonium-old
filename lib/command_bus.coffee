@@ -1,11 +1,19 @@
+dnode            = require "dnode"
 DomainRepository = require "./domain_repository"
 Profiler         = require "./profiler"
 
 class CommandBus
 
-  constructor: ({@domainRepository, @logger}) ->
+  constructor: ({@domainRepository, @logger, @port}) ->
     throw new Error "Missing domain repository" unless @domainRepository?
     throw new Error "Missing logger" unless @logger?
+
+    if @port
+      server = dnode
+        executeCommand: (commandName, args..., callback) =>
+          @executeCommand commandName, args..., callback
+      server.listen @port
+      @logger.info "CommandBus", "listening on port #{@port}..."
 
     @commandHandlers = {}
 
