@@ -12,6 +12,10 @@ class CommandBus
       server = dnode
         executeCommand: (commandName, args..., callback) =>
           @executeCommand commandName, args..., callback
+
+        createNewUid: (callback) =>
+          @domainRepository.createNewUid callback
+
       server.listen @port
       @logger.info "CommandBus", "listening on port #{@port}..."
 
