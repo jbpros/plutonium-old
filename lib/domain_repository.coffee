@@ -66,8 +66,8 @@ class DomainRepository
 
   findAggregateByUid: (Entity, uid, options, callback) ->
     [options, callback] = [{}, options] unless callback?
-    callback new Error "Missing entity constructor" unless Entity?
-    callback new Error "Missing UID" unless uid?
+    return callback new Error "Missing entity constructor" unless Entity?
+    return callback new Error "Missing UID" unless uid?
 
     @store.findAllByAggregateUid uid, (err, events) ->
       if err?
