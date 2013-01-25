@@ -79,7 +79,7 @@ class Entity
         p.end()
         Entity.logger.debug "profiler", "spent #{_t}µs playing events"
         callback null, entity
-    processNextEvent()
+    process.nextTick processNextEvent
 
   @createNewUid: (callback) =>
     @_checkDependencies()
