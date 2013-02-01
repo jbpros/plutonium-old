@@ -107,7 +107,7 @@ class CouchDbEventStore extends EventStore
         event.uid          = uid
         event.aggregateUid = aggregateUid
         events.push event
-        rowCallback()
+        process.nextTick rowCallback
     , 1
 
     rowsQueue.drain = ->
