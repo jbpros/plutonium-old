@@ -9,14 +9,14 @@ class CommandBus
     throw new Error "Missing logger" unless @logger?
 
     if @port
-      server = dnode
+      @server = dnode
         executeCommand: (commandName, args..., callback) =>
           @executeCommand commandName, args..., callback
 
         createNewUid: (callback) =>
           @domainRepository.createNewUid callback
 
-      server.listen @port
+      @connection = @server.listen @port
       @logger.info "CommandBus", "listening on port #{@port}..."
 
     @commandHandlers = {}
@@ -46,5 +46,8 @@ class CommandBus
       callback new Error "No handler for command \"#{commandName}\" was found"
     else
       callback null, commandHandler
+
+  close: (callback) ->
+    @connection.close callback
 
 module.exports = CommandBus

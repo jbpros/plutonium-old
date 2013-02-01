@@ -16,6 +16,7 @@ class CommandBusClient
           logger.error "CommandBusClient", "failed to create UID: #{err}"
         else
           logger.log "CommandBusClient", "UID created: #{uid}"
+        client.end()
         callback err, uid
 
   executeCommand: (commandName, args..., callback) ->
@@ -25,9 +26,10 @@ class CommandBusClient
     client.on "remote", (remote) ->
       remote.executeCommand commandName, args..., (err) ->
         if (err)
-          logger.error "CommandBusClient", "command failed remotely: #{err}"
+          logger.error "CommandBusClient", "command <#{commandName}> failed remotely: #{err}"
         else
-          logger.log "CommandBusClient", "command sent"
+          logger.log "CommandBusClient", "command <#{commandName}> sent"
+        client.end()
         callback err
 
 module.exports = CommandBusClient
