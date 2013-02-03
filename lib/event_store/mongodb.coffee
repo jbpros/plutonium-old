@@ -17,9 +17,9 @@ class MongoDbEventStore extends EventStore
 
   initialize: (callback) ->
     MongoClient.connect @uri, (err, db) =>
-      return _closeConnectionAndReturn db, err, callback if err?
+      return @_closeConnectionAndReturn db, err, callback if err?
       db.createCollection @collectionName, (err, collection) =>
-        return _closeConnectionAndReturn db, err, callback if err?
+        return @_closeConnectionAndReturn db, err, callback if err?
         @db         = db
         @collection = collection
         callback null
