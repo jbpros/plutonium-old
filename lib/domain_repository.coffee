@@ -129,7 +129,8 @@ class DomainRepository
   _commit: (callback) ->
     return callback null if @aggregates.length is 0
 
-    committedEvents = []
+    events      = [];
+    savedEvents = [];
 
     aggregateQueue = async.queue (aggregate, aggregateTaskCallback) =>
       firstEvent = aggregate.appliedEvents.shift()
@@ -140,11 +141,12 @@ class DomainRepository
           queue.push nextEvent if nextEvent?
 
           @logger.log "commit", "saving event \"#{event.name}\" for aggregate #{event.aggregateUid}"
+          events.push event
           @store.saveEvent event, (err, event) =>
+            savedEvents.push(event);
             if err?
               eventTaskCallback err
             else
-              committedEvents.push event
               eventTaskCallback null
         , 1
 
@@ -157,12 +159,12 @@ class DomainRepository
 
     aggregateQueue.drain = (err) =>
       return callback err if err?
-      return callback null unless committedEvents.length > 0
+      return callback null unless events.length > 0
       publicationQueue = async.queue (event, publicationCallback) =>
         @_publishEvent event, publicationCallback
       , Infinity
       publicationQueue.drain = callback
-      publicationQueue.push committedEvents
+      publicationQueue.push events
 
     aggregateQueue.push @aggregates
     @aggregates = []
