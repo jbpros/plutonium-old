@@ -2,6 +2,7 @@ http              = require "http"
 async             = require "async"
 uuid              = require "node-uuid"
 CouchDbEventStore = require "./event_store/couchdb"
+MongoDbEventStore = require "./event_store/mongodb"
 RedisEventStore   = require "./event_store/redis"
 
 class EventStore
@@ -22,6 +23,7 @@ class EventStore
     throw new Error "Implement me"
 
   @CouchDb: CouchDbEventStore
+  @MongoDb: MongoDbEventStore
   @Redis: RedisEventStore
 
 module.exports = EventStore
