@@ -27,7 +27,8 @@
     "devnull": "0.0.10",
     "microtime": "~0.3.3",
     "dnode": "~1.0.2",
-    "mongodb": "~1.2.12"
+    "mongodb": "~1.2.12",
+    "bson": "~0.1.7"
   },
   "licenses": [
     {
