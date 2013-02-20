@@ -4,6 +4,9 @@ class Report
   get: (attributeName) ->
     @attributes[attributeName]
 
+  set: (attributeName, value) ->
+    @attributes[attributeName] = value;
+
   getAttributes: ->
     @attributes
 
