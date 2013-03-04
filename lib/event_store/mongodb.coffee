@@ -59,7 +59,7 @@ class MongoDbEventStore extends EventStore
         uid: eventUid
         name: event.name
         aggregateUid: event.aggregateUid
-        timestamp: Date.now()
+        timestamp: event.timestamp
         data: {}
         _attachments: {}
 
@@ -94,6 +94,7 @@ class MongoDbEventStore extends EventStore
       name         = row.name
       aggregateUid = row.aggregateUid
       data         = row.data
+      timestamp    = row.timestamp
 
       @_loadAttachmentsFromRow row, (err, attachments) ->
         return rowCallback err if err?
@@ -101,9 +102,13 @@ class MongoDbEventStore extends EventStore
         for attachmentName, attachmentBody of attachments
           data[attachmentName] = attachmentBody
 
-        event              = new Event name, data
-        event.uid          = uid
-        event.aggregateUid = aggregateUid
+        event = new Event
+          name: name
+          data: data
+          uid: uid
+          aggregateUid: aggregateUid
+          timestamp: timestamp
+
         events.push event
         process.nextTick rowCallback
     , 1
