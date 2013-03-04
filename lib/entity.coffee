@@ -19,7 +19,7 @@ class Entity
 
   triggerEvent: (eventName, attributes, callback) ->
     @constructor._checkDependencies()
-    event = new Event eventName, attributes
+    event = new Event name: eventName, data: attributes
     @applyEvent event, (err) =>
       return callback err if err?
       event.aggregateUid = @uid
