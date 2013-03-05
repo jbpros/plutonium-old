@@ -59,7 +59,7 @@ class CouchDbEventStore extends EventStore
       payload =
         name: event.name
         aggregateUid: event.aggregateUid
-        timestamp: Date.now()
+        timestamp: event.timestamp
         data: {}
         _attachments: {}
 
@@ -98,14 +98,19 @@ class CouchDbEventStore extends EventStore
       name         = value.name
       aggregateUid = value.aggregateUid
       data         = value.data
+      timestamp    = value.timestamp
 
       @_loadAttachmentsFromRow row, (err, attachments) ->
         return rowCallback err if err?
         for attachmentName, attachment of attachments
           data[attachmentName] = attachment
-        event              = new Event name, data
-        event.uid          = uid
-        event.aggregateUid = aggregateUid
+        event = new Event
+          name: name
+          data: data
+          uid: uid
+          aggregateUid: aggregateUid
+          timestamp: timestamp
+
         events.push event
         process.nextTick rowCallback
     , 1
