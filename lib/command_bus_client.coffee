@@ -26,7 +26,7 @@ class CommandBusClient
     client.on "remote", (remote) ->
       remote.executeCommand commandName, args..., (err) ->
         if (err)
-          logger.error "CommandBusClient", "command <#{commandName}> failed remotely: #{err}"
+          logger.error "CommandBusClient", "command <#{commandName}> failed remotely: #{err.message || err}"
         else
           logger.log "CommandBusClient", "command <#{commandName}> sent"
         client.end()
