@@ -109,6 +109,7 @@ class MongoDbEventStore extends EventStore
                 @logger.warning "MongoDbEventStore#saveEvent", "concurrency situation - retrying after #{retryDelay}ms"
                 setTimeout tryToPersist, retryDelay
             else
+              event.version = version
               callback err, event
 
       tryToPersist()
@@ -136,6 +137,7 @@ class MongoDbEventStore extends EventStore
       aggregateUid = row.aggregateUid
       data         = row.data
       timestamp    = row.timestamp
+      version      = row.version
 
       @_loadAttachmentsFromRow row, (err, attachments) ->
         return rowCallback err if err?
@@ -149,6 +151,7 @@ class MongoDbEventStore extends EventStore
           uid: uid
           aggregateUid: aggregateUid
           timestamp: timestamp
+          version: version
 
         events.push event
         process.nextTick rowCallback
