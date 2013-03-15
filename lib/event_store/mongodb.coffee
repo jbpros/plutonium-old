@@ -9,6 +9,11 @@ MongoClient = require("mongodb").MongoClient
 
 class MongoDbEventStore extends EventStore
 
+  MONGODB_DUPLICATE_KEY_ERROR_CODE = 11000
+  MIN_RETRY_DELAY                  = 1
+  MAX_RETRY_DELAY                  = 15
+  MAX_RETRIES                      = 10
+
   constructor: ({@uri, @logger}) ->
     throw new Error "Missing URI" unless @uri
     throw new Error "Missing logger" unless @logger
@@ -39,7 +44,7 @@ class MongoDbEventStore extends EventStore
       return callback err if err?
       @collection.ensureIndex {"aggregateUid": 1}, (err, result) =>
         return callback err if err?
-        @collection.ensureIndex {"timestamp": 1}, callback
+        @collection.ensureIndex {"aggregateUid": 1, "version": 1}, { unique: true }, callback
 
   createNewUid: (callback) ->
     uid = uuid.v4()
@@ -69,8 +74,44 @@ class MongoDbEventStore extends EventStore
         else
           payload["data"][key] = value
 
-      @collection.insert payload, {w:1}, (err, result) ->
-        callback err, event
+      params  = aggregateUid: event.aggregateUid
+      options =
+        fields:
+          version: 1
+        sort:
+          version: -1
+        limit: 1
+
+      getCurrentVersion = (callback) =>
+        @collection.find(params, options).toArray (err, items) =>
+          return callback err if (err)
+
+          item = items[0]
+          version = if item then item.version + 1 else 1
+          callback null, version
+
+      tries = 0
+
+      tryToPersist = =>
+        tries++
+        getCurrentVersion (err, version) =>
+          payload.version = version
+
+          @collection.insert payload, {w:1}, (err, result) =>
+            if (err && err.code != MONGODB_DUPLICATE_KEY_ERROR_CODE)
+              return callback err
+            else if (err)
+              if (tries == MAX_RETRIES)
+                @logger.critical "MongoDbEventStore#saveEvent", "concurrency situation - Reached maximum retries while persisting event #{eventUid} for aggregate #{event.aggregateUid}"
+                return callback new Error "Reached maximum retries while persisting event #{eventUid} for aggregate #{event.aggregateUid}"
+              else
+                retryDelay = Math.floor(Math.random() * (MAX_RETRY_DELAY - MIN_RETRY_DELAY + 1)) + MIN_RETRY_DELAY
+                @logger.warning "MongoDbEventStore#saveEvent", "concurrency situation - retrying after #{retryDelay}ms"
+                setTimeout tryToPersist, retryDelay
+            else
+              callback err, event
+
+      tryToPersist()
 
   _find: (params, callback) ->
     p = new Profiler "MongoDbEventStore#_find(db request)", @logger
