@@ -23,6 +23,7 @@ class CommandBusClient
     logger = @logger
     logger.log "CommandBusClient", "sending command \"#{commandName}\" to localhost:#{@port}..."
     client = dnode.connect @port
+    client.on "error", callback
     client.on "remote", (remote) ->
       remote.executeCommand commandName, args..., (err) ->
         if (err)
