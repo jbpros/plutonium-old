@@ -10,7 +10,7 @@ class DomainRepository
     throw new Error "Missing store" unless @store?
     throw new Error "Missing event bus emitter" unless @emitter?
     throw new Error "Missing logger" unless @logger?
-    @aggregates            = []
+    @aggregateEvents       = {}
     @directListeners       = {}
     @nextDirectListenerKey = 0
     @transacting           = false
@@ -89,7 +89,9 @@ class DomainRepository
         callback()
 
   add: (aggregate) ->
-    @aggregates.push aggregate
+    throw new Error "Aggregate is missing its UID" unless aggregate.uid?
+    @aggregateEvents[aggregate.uid] ?= []
+    @aggregateEvents[aggregate.uid] = @aggregateEvents[aggregate.uid].concat aggregate.appliedEvents
 
   # Listen for events before they are published to the event bus
   # Don't use this in reporters/reports! This is reserved for domain routines
@@ -127,17 +129,17 @@ class DomainRepository
     directListeners[directListenerKey] = listener
 
   _commit: (callback) ->
-    return callback null if @aggregates.length is 0
+    return callback null if Object.keys(@aggregateEvents).length is 0
 
     events      = [];
     savedEvents = [];
 
-    aggregateQueue = async.queue (aggregate, aggregateTaskCallback) =>
-      firstEvent = aggregate.appliedEvents.shift()
+    aggregateQueue = async.queue (aggregateAppliedEvents, aggregateTaskCallback) =>
+      firstEvent = aggregateAppliedEvents.shift()
 
       if firstEvent?
         queue = async.queue (event, eventTaskCallback) =>
-          nextEvent = aggregate.appliedEvents.shift()
+          nextEvent = aggregateAppliedEvents.shift()
           queue.push nextEvent if nextEvent?
 
           @logger.log "commit", "saving event \"#{event.name}\" for aggregate #{event.aggregateUid}"
@@ -166,12 +168,12 @@ class DomainRepository
       publicationQueue.drain = callback
       publicationQueue.push events
 
-    aggregateQueue.push @aggregates
-    @aggregates = []
+    for aggregateUid, aggregateEvents of @aggregateEvents
+      aggregateQueue.push [aggregateEvents]
+    @aggregateEvents = {}
 
   _rollback: (callback) ->
-    @aggregates.forEach (aggregate) =>
-      aggregate.appliedEvents = []
+    @aggregateEvents = {}
     callback()
 
   _publishEvent: (event, callback) ->
