@@ -1,5 +1,5 @@
-dnode            = require "dnode"
 DomainRepository = require "./domain_repository"
+CommandBusServer = require "./command_bus_server"
 Profiler         = require "./profiler"
 
 class CommandBus
@@ -9,20 +9,16 @@ class CommandBus
     throw new Error "Missing logger" unless @logger?
 
     if @port
-      @server = dnode
-        executeCommand: (commandName, args..., callback) =>
-          @executeCommand commandName, args..., callback
-
-        createNewUid: (callback) =>
-          @domainRepository.createNewUid callback
-
-      @connection = @server.listen @port
-      @logger.info "CommandBus", "listening on port #{@port}..."
+      @server = new CommandBusServer commandBus: @, port: @port, logger: @logger
+      @server.listen @port
 
     @commandHandlers = {}
 
   registerCommandHandler: (command, handler) ->
     @commandHandlers[command] = handler
+
+  createNewUid: (callback) ->
+    @domainRepository.createNewUid callback
 
   executeCommand: (commandName, args..., callback) ->
     domainRepository = @domainRepository
@@ -48,6 +44,6 @@ class CommandBus
       callback null, commandHandler
 
   close: (callback) ->
-    @connection.close callback
+    @server.close callback
 
 module.exports = CommandBus

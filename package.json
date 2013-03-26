@@ -26,9 +26,11 @@
     "nano": "~3.3.6",
     "devnull": "0.0.10",
     "microtime": "~0.3.3",
-    "dnode": "~1.0.2",
     "mongodb": "~1.2.12",
-    "bson": "~0.1.7"
+    "bson": "~0.1.7",
+    "multipart": "~0.1.5",
+    "crypto": "0.0.3",
+    "formidable": "~1.0.13"
   },
   "licenses": [
     {
