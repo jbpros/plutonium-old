@@ -81,6 +81,7 @@ class DomainRepository
     @store.findAll (err, events) =>
       if events.length > 0
         eventQueue = async.queue (event, eventTaskCallback) =>
+          event.replayed = true
           @_publishEvent event, eventTaskCallback
         , 1
         eventQueue.drain = callback
