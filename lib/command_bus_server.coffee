@@ -43,6 +43,7 @@ class CommandBusServer
         djump res, 200, uid: uid
 
   _handleCommand: (req, res) ->
+    logger = @logger
     commandName = null
     args = []
 
@@ -65,13 +66,20 @@ class CommandBusServer
           args.push data
 
     form.parse req, (err, fields, files) =>
-      return djump res, 400, error: err if err?
-      return djump res, 400, error: new Error "Missing command name" unless commandName?
+      if err?
+        logger.warning "CommandBusServer", "received command failed (#{err})"
+        return djump res, 400, error: err
+      unless commandName?
+        logger.warning "CommandBusServer", "missing command name"
+        return djump res, 400, error: new Error "Missing command name"
 
+      logger.log "CommandBusServer", "start command \"#{commandName}\""
       @commandBus.executeCommand commandName, args..., (err) ->
         if err?
+          logger.alert "CommandBusServer", "error while executing command (#{err})"
           djump res, 500, error: err
         else
+          logger.log "CommandBusServer", "command \"#{commandName}\" started successfully"
           djump res, 202
 
 djump = (res, code, obj) ->
