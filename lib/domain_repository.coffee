@@ -92,7 +92,10 @@ class DomainRepository
   add: (aggregate) ->
     throw new Error "Aggregate is missing its UID" unless aggregate.uid?
     @aggregateEvents[aggregate.uid] ?= []
-    @aggregateEvents[aggregate.uid] = @aggregateEvents[aggregate.uid].concat aggregate.appliedEvents
+    addedEvents = @aggregateEvents[aggregate.uid]
+    for event in aggregate.appliedEvents
+      eventAdded = addedEvents.indexOf(event) isnt -1
+      addedEvents.push event unless eventAdded # todo: use a Set instead of indexOf?
 
   # Listen for events before they are published to the event bus
   # Don't use this in reporters/reports! This is reserved for domain routines
