@@ -1,13 +1,13 @@
 url         = require "url"
 async       = require "async"
 uuid        = require "node-uuid"
-
 Event       = require "../event"
-EventStore  = require "../event_store"
+Snapshot    = require "../snapshot"
+Base        = require "./base"
 Profiler    = require "../profiler"
 MongoClient = require("mongodb").MongoClient
 
-class MongoDbEventStore extends EventStore
+class MongoDbEventStore extends Base
 
   MONGODB_DUPLICATE_KEY_ERROR_CODE = 11000
   MIN_RETRY_DELAY                  = 1
@@ -18,21 +18,33 @@ class MongoDbEventStore extends EventStore
     throw new Error "Missing URI" unless @uri
     throw new Error "Missing logger" unless @logger
 
-    @collectionName = "EventCollection"
+    @eventCollectionName    = "events"
+    @snapshotCollectionName = "snapshots"
 
   initialize: (callback) ->
-    MongoClient.connect @uri, (err, db) =>
-      return @_closeConnectionAndReturn db, err, callback if err?
-      db.createCollection @collectionName, (err, collection) =>
-        return @_closeConnectionAndReturn db, err, callback if err?
-        @db         = db
-        @collection = collection
+    async.waterfall [
+      (next) =>
+        MongoClient.connect @uri, next
+      (db, next) =>
+        @db = db
+        @db.createCollection @eventCollectionName, next
+      (eventCollection, next) =>
+        @eventCollection = eventCollection
+        @db.createCollection @snapshotCollectionName, next
+      (snapshotCollection, next) =>
+        @snapshotCollection = snapshotCollection
+        next()
+    ], (err) =>
+      if err?
+        @_closeConnectionAndReturn db, err, callback
+      else
         callback null
 
   destroy: (callback) ->
     @_closeConnectionAndReturn @db, null, (err) =>
-      @db         = null
-      @collection = null
+      @db                 = null
+      @eventCollection    = null
+      @snapshotCollection = null
       callback null
 
   _closeConnectionAndReturn: (db, err, callback) ->
@@ -40,21 +52,31 @@ class MongoDbEventStore extends EventStore
     callback err
 
   setup: (callback) ->
-    @collection.remove (err, result) =>
-      return callback err if err?
-      @collection.ensureIndex {"aggregateUid": 1}, (err, result) =>
-        return callback err if err?
-        @collection.ensureIndex {"aggregateUid": 1, "version": 1}, { unique: true }, callback
+    async.series [
+      (next) =>
+        @eventCollection.remove next
+      (next) =>
+        @eventCollection.ensureIndex {"aggregateUid": 1}, next
+      (next) =>
+        @eventCollection.ensureIndex {"aggregateUid": 1, "version": 1}, { unique: true }, next
+      (next) =>
+        @snapshotCollection.remove next
+      (next) =>
+        @snapshotCollection.ensureIndex {"aggregateUid": 1}, next
+    ], callback
 
   createNewUid: (callback) ->
     uid = uuid.v4()
     callback null, uid
 
-  findAll: (callback) ->
+  findAllEvents: (callback) ->
     @_find {}, callback
 
-  findAllByAggregateUid: (aggregateUid, callback) ->
+  findAllEventsByAggregateUid: (aggregateUid, callback) ->
     @_find aggregateUid: aggregateUid, callback
+
+  findAllEventsByAggregateUidAfterVersion: (aggregateUid, version, callback) ->
+    @_find aggregateUid: aggregateUid, version: { $gt: version }, callback
 
   saveEvent: (event, callback) =>
     @createNewUid (err, eventUid) =>
@@ -83,7 +105,7 @@ class MongoDbEventStore extends EventStore
         limit: 1
 
       getCurrentVersion = (callback) =>
-        @collection.find(params, options).toArray (err, items) =>
+        @eventCollection.find(params, options).toArray (err, items) =>
           return callback err if (err)
 
           item = items[0]
@@ -97,7 +119,7 @@ class MongoDbEventStore extends EventStore
         getCurrentVersion (err, version) =>
           payload.version = version
 
-          @collection.insert payload, {w:1}, (err, result) =>
+          @eventCollection.insert payload, {w:1}, (err, result) =>
             if (err && err.code != MONGODB_DUPLICATE_KEY_ERROR_CODE)
               return callback err
             else if (err)
@@ -114,10 +136,28 @@ class MongoDbEventStore extends EventStore
 
       tryToPersist()
 
+  loadSnapshotForAggregateUid: (uid, callback) ->
+    @snapshotCollection.findOne aggregateUid: uid, (err, item) ->
+      if err?
+        callback err
+      else if item
+        snapshot = new Snapshot item
+        callback null, snapshot
+      else
+        callback null, null
+
+  saveSnapshot: (snapshot, callback) ->
+    @snapshotCollection.update aggregateUid: snapshot.aggregateUid, snapshot, w: 1, upsert: 1, (err) =>
+      if err?
+        @logger.alert "MongoDbEventStore#saveSnapshot", "failed to save snapshot of aggregate \"#{snapshot.aggregateUid}\": #{err}"
+      else
+        @logger.log "MongoDbEventStore#saveSnapshot", "saved snapshot for aggregate \"#{snapshot.aggregateUid}\""
+      callback? err
+
   _find: (params, callback) ->
     p = new Profiler "MongoDbEventStore#_find(db request)", @logger
     p.start()
-    @collection.find(params).sort("timestamp":1).toArray (err, items) =>
+    @eventCollection.find(params).sort("timestamp":1).toArray (err, items) =>
       p.end()
 
       if err?

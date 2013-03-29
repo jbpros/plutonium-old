@@ -1,5 +1,6 @@
-async    = require "async"
-Profiler = require "./profiler"
+async                 = require "async"
+Profiler              = require "./profiler"
+AggregateInstantiator = require "./aggregate_instantiator"
 
 COUCHDB_STORE = "couchdb"
 REDIS_STORE   = "redis"
@@ -64,18 +65,12 @@ class DomainRepository
   createNewUid: (callback) ->
     @store.createNewUid callback
 
-  findAggregateByUid: (Entity, uid, options, callback) ->
+  findAggregateByUid: (AggregateRoot, uid, options, callback) ->
     [options, callback] = [{}, options] unless callback?
-    return callback new Error "Missing entity constructor" unless Entity?
+    return callback new Error "Missing aggregate root constructor" unless AggregateRoot?
     return callback new Error "Missing UID" unless uid?
-
-    @store.findAllByAggregateUid uid, (err, events) ->
-      if err?
-        callback err
-      else if events.length is 0
-        callback null, null
-      else
-        Entity.buildFromEvents events, callback
+    aggregateInstantiator = new AggregateInstantiator store: @store, AggregateRoot: AggregateRoot, logger: @logger
+    aggregateInstantiator.findByUid uid, callback
 
   replayAllEvents: (callback) ->
     @store.findAll (err, events) =>
@@ -93,7 +88,7 @@ class DomainRepository
     throw new Error "Aggregate is missing its UID" unless aggregate.uid?
     @aggregateEvents[aggregate.uid] ?= []
     addedEvents = @aggregateEvents[aggregate.uid]
-    for event in aggregate.appliedEvents
+    for event in aggregate.$appliedEvents
       eventAdded = addedEvents.indexOf(event) isnt -1
       addedEvents.push event unless eventAdded # todo: use a Set instead of indexOf?
 

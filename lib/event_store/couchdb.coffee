@@ -3,10 +3,10 @@ async      = require "async"
 uuid       = require "node-uuid"
 nano       = require "nano"
 Event      = require "../event"
-EventStore = require "../event_store"
+Base       = require "./base"
 Profiler   = require "../profiler"
 
-class CouchDbEventStore extends EventStore
+class CouchDbEventStore extends Base
 
   constructor: ({@uri, @logger}) ->
     throw new Error "Missing URI" unless @uri
@@ -46,10 +46,10 @@ class CouchDbEventStore extends EventStore
     uid = uuid.v4()
     callback null, uid
 
-  findAll: (callback) ->
+  findAllEvents: (callback) ->
     @_find "byTimestamp", {}, callback
 
-  findAllByAggregateUid: (aggregateUid, callback) ->
+  findAllEventsByAggregateUid: (aggregateUid, callback) ->
     @_find "byAggregate", { startkey: [aggregateUid], endkey: [aggregateUid, {}] }, callback
 
   saveEvent: (event, callback) =>

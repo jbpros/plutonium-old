@@ -1,0 +1,26 @@
+class BaseEventStore
+
+  setup: (callback) =>
+    throw new Error "Implement me"
+
+  createNewUid: (callback) =>
+    throw new Error "Implement me"
+
+  findAllEvents: (options, callback) ->
+    throw new Error "implement me"
+
+  findAllEventsByAggregateUid: (aggregateUid, options, callback) ->
+    throw new Error "Implement me"
+
+  loadSnapshotForAggregateUid: (uid, callback) ->
+    # implement me if you want snapshots in your store
+    callback null, null
+
+  saveEvent: (event, callback) =>
+    throw new Error "Implement me"
+
+  saveSnapshot: (snapshot, callback) =>
+    # implement me if you want snapshots in your store
+    callback? null
+
+module.exports = BaseEventStore
