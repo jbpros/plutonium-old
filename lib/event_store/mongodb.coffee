@@ -117,7 +117,7 @@ class MongoDbEventStore extends EventStore
   _find: (params, callback) ->
     p = new Profiler "MongoDbEventStore#_find(db request)", @logger
     p.start()
-    @collection.find(params).sort("timestamp":1).toArray (err, items) =>
+    @collection.find(params).sort("version":1).toArray (err, items) =>
       p.end()
 
       if err?
