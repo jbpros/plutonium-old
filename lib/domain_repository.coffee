@@ -73,7 +73,7 @@ class DomainRepository
     aggregateInstantiator.findByUid uid, callback
 
   replayAllEvents: (callback) ->
-    @store.findAll (err, events) =>
+    @store.findAllEvents (err, events) =>
       if events.length > 0
         eventQueue = async.queue (event, eventTaskCallback) =>
           event.replayed = true
