@@ -36,7 +36,7 @@ class MongoDbEventStore extends Base
         next()
     ], (err) =>
       if err?
-        @_closeConnectionAndReturn db, err, callback
+        @_closeConnectionAndReturn @db, err, callback
       else
         callback null
 
