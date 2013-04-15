@@ -94,6 +94,9 @@ AggregateRoot = (name, finalCtor, Ctor) ->
   Base.findByUid = (uid, callback) ->
     @$domainRepository.findAggregateByUid @, uid, callback
 
+  Base.findAllEvents = (uid, callback) ->
+    @$domainRepository.findAllEventsByAggregateUid uid, callback
+
   Base.buildFromEvents = (events, callback) ->
     entity = new @
     entity.applyEvents events, callback
