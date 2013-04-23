@@ -5,6 +5,7 @@ nano       = require "nano"
 Event      = require "../event"
 Base       = require "./base"
 Profiler   = require "../profiler"
+defer      = require "../defer"
 
 class CouchDbEventStore extends Base
 
@@ -112,7 +113,7 @@ class CouchDbEventStore extends Base
           timestamp: timestamp
 
         events.push event
-        process.nextTick rowCallback
+        defer rowCallback
     , 1
 
     rowsQueue.drain = ->
