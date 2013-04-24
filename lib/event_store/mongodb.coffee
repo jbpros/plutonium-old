@@ -77,7 +77,7 @@ class MongoDbEventStore extends Base
     @_find aggregateUid: aggregateUid, callback
 
   findSomeEventsByAggregateUidAfterVersion: (aggregateUid, version, eventCount, callback) ->
-    @_findLimited { aggregateUid: aggregateUid }, version, eventCount, callback
+    @_findLimited { aggregateUid: aggregateUid, version: { "$gt": version } }, eventCount, callback
 
   findAllEventsByAggregateUidAfterVersion: (aggregateUid, version, callback) ->
     @_find aggregateUid: aggregateUid, version: { $gt: version }, callback
@@ -158,10 +158,9 @@ class MongoDbEventStore extends Base
         @logger.log "MongoDbEventStore#saveSnapshot", "saved snapshot for aggregate \"#{snapshot.aggregateUid}\""
       callback? err
 
-  _findLimited: (params, version, eventCount, callback) ->
+  _findLimited: (params, eventCount, callback) ->
     p = new Profiler "MongoDbEventStore#_findLimited(db request)", @logger
     p.start()
-    params.version = { $gt: version }
     @eventCollection.find(params).sort("version":1).limit(eventCount).toArray (err, items) =>
       p.end()
 
