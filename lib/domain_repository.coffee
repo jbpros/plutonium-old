@@ -1,6 +1,8 @@
 async                 = require "async"
 Profiler              = require "./profiler"
 AggregateInstantiator = require "./aggregate_instantiator"
+util                  = require "util"
+defer                 = require "./defer"
 
 COUCHDB_STORE = "couchdb"
 REDIS_STORE   = "redis"
@@ -29,7 +31,7 @@ class DomainRepository
         transaction (err) =>
           p.end()
           if err?
-            @logger.alert "transaction", "failed, rolling back (#{err})"
+            @logger.alert "transaction", "failed, rolling back (#{util.inspect(err)})"
             @_rollback =>
               @logger.log "transaction", "rolled back (#{@transactionQueue.length()} more transaction(s) in queue)"
               @transacting = false
@@ -83,6 +85,9 @@ class DomainRepository
         eventQueue.push events
       else
         callback()
+
+  findAllEventsByAggregateUid: (aggregateUid, callback) ->
+    @store.findAllEventsByAggregateUid aggregateUid, callback
 
   add: (aggregate) ->
     throw new Error "Aggregate is missing its UID" unless aggregate.uid?
@@ -174,7 +179,7 @@ class DomainRepository
     callback()
 
   _publishEvent: (event, callback) ->
-    process.nextTick =>
+    defer =>
       @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to direct listeners"
       @_publishEventToDirectListeners event, (err) =>
         @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?

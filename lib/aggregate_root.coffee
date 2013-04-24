@@ -3,6 +3,7 @@ Entity   = require "./entity"
 Event    = require "./event"
 Profiler = require "./profiler"
 inherit  = require "./inherit"
+defer    = require "./defer"
 
 eventHandlers = {}
 
@@ -79,12 +80,12 @@ AggregateRoot = (name, finalCtor, Ctor) ->
           p1.end(silent: true)
           _t += p1.spent
           return callback err if err?
-          process.nextTick processNextEvent
+          defer processNextEvent
       else
         p.end()
         @$logger.debug "profiler", "spent #{_t}µs applying events"
         callback null, @
-    process.nextTick processNextEvent
+    defer processNextEvent
 
   Base.initialize = ->
     @$domainRepository = AggregateRoot.domainRepository
@@ -93,6 +94,9 @@ AggregateRoot = (name, finalCtor, Ctor) ->
 
   Base.findByUid = (uid, callback) ->
     @$domainRepository.findAggregateByUid @, uid, callback
+
+  Base.findAllEvents = (uid, callback) ->
+    @$domainRepository.findAllEventsByAggregateUid uid, callback
 
   Base.buildFromEvents = (events, callback) ->
     entity = new @
