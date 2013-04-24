@@ -6,6 +6,7 @@ Snapshot    = require "../snapshot"
 Base        = require "./base"
 Profiler    = require "../profiler"
 MongoClient = require("mongodb").MongoClient
+defer       = require "../defer"
 
 class MongoDbEventStore extends Base
 
@@ -194,7 +195,7 @@ class MongoDbEventStore extends Base
           version: version
 
         events.push event
-        process.nextTick rowCallback
+        defer rowCallback
     , 1
 
     rowsQueue.drain = ->
