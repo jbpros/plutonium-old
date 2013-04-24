@@ -2,6 +2,7 @@ async                 = require "async"
 Profiler              = require "./profiler"
 AggregateInstantiator = require "./aggregate_instantiator"
 util                  = require "util"
+defer                 = require "./defer"
 
 COUCHDB_STORE = "couchdb"
 REDIS_STORE   = "redis"
@@ -178,7 +179,7 @@ class DomainRepository
     callback()
 
   _publishEvent: (event, callback) ->
-    process.nextTick =>
+    defer =>
       @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to direct listeners"
       @_publishEventToDirectListeners event, (err) =>
         @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
