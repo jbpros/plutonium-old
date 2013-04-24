@@ -76,8 +76,11 @@ class MongoDbEventStore extends Base
   findAllEventsByAggregateUid: (aggregateUid, callback) ->
     @_find aggregateUid: aggregateUid, callback
 
-  findSomeEventsByAggregateUidAfterVersion: (aggregateUid, version, eventCount, callback) ->
-    @_findLimited { aggregateUid: aggregateUid, version: { "$gt": version } }, eventCount, callback
+  countAllEventsByAggregateUid: (aggregateUid, callback) ->
+    @_count aggregateUid: aggregateUid, callback
+
+  findSomeEventsByAggregateUidBeforeVersion: (aggregateUid, version, eventCount, callback) ->
+    @_findLimited { aggregateUid: aggregateUid, version: { "$lte": version } }, eventCount, callback
 
   findAllEventsByAggregateUidAfterVersion: (aggregateUid, version, callback) ->
     @_find aggregateUid: aggregateUid, version: { $gt: version }, callback
@@ -161,7 +164,7 @@ class MongoDbEventStore extends Base
   _findLimited: (params, eventCount, callback) ->
     p = new Profiler "MongoDbEventStore#_findLimited(db request)", @logger
     p.start()
-    @eventCollection.find(params).sort("version":1).limit(eventCount).toArray (err, items) =>
+    @eventCollection.find(params).sort("version": -1).limit(eventCount).toArray (err, items) =>
       p.end()
 
       if err?
@@ -183,6 +186,11 @@ class MongoDbEventStore extends Base
         callback null, []
       else
         @_instantiateEventsFromRows items, callback
+
+  _count: (params, callback) ->
+    @eventCollection.find(params).count (err, number) ->
+      return callback err if err?
+      callback null, number
 
   _instantiateEventsFromRows: (rows, callback) ->
     events = []
