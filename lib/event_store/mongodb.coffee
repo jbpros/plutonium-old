@@ -71,7 +71,17 @@ class MongoDbEventStore extends Base
     callback null, uid
 
   findAllEvents: (callback) ->
-    @_find {}, callback
+    p = new Profiler "MongoDbEventStore#_find(db request)", @logger
+    p.start()
+    @eventCollection.find({}).sort("timestamp":1).toArray (err, items) =>
+      p.end()
+
+      if err?
+        callback err
+      else if not items?
+        callback null, []
+      else
+        @_instantiateEventsFromRows items, callback
 
   findAllEventsByAggregateUid: (aggregateUid, callback) ->
     @_find aggregateUid: aggregateUid, callback
