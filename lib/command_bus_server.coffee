@@ -4,7 +4,8 @@ formidable = require "formidable"
 
 class CommandBusServer
 
-  JSON_MEDIA_TYPE_REGEXP = /^application\/(.+\+)?json$/i
+  JSON_MEDIA_TYPE_REGEXP         = /^application\/(.+\+)?json$/i
+  OCTET_STREAM_MEDIA_TYPE_REGEXP = /^application\/octet-stream/i
 
   constructor: ({@commandBus, @logger}) ->
     throw new Error "Missing command bus" unless @commandBus?
@@ -50,15 +51,24 @@ class CommandBusServer
     form = new formidable.IncomingForm();
 
     form.onPart = (part) ->
-      data = ""
+      self         = this
+      chunks       = []
+      chunksLength = 0
 
       part.on "data", (chunk) ->
-        data += chunk
+        self.pause()
+        chunks.push new Buffer chunk
+        chunksLength += chunk.length
+        self.resume()
 
       part.on "end", ->
         contentType = part.headers["content-type"]
-        if contentType and contentType.match JSON_MEDIA_TYPE_REGEXP
-          data = JSON.parse data
+        data        = Buffer.concat chunks, chunksLength
+
+        if contentType && contentType.match JSON_MEDIA_TYPE_REGEXP
+          data = JSON.parse data.toString()
+        else if not contentType
+          data = data.toString()
 
         if part.name is "name" # command name
           commandName = data

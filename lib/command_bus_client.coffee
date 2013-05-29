@@ -46,8 +46,7 @@ class CommandBusClient
       headers =
         "Content-Disposition": "form-data; name=\"args[]\""
         "Content-Type": "application/json"
-
-      if not Buffer.isBuffer arg and not arg.pipe?
+      if not Buffer.isBuffer(arg) and not arg.pipe?
         stream.write headers, JSON.stringify arg
       else
         headers["Content-Type"] = "application/octet-stream"
@@ -74,7 +73,8 @@ class CommandBusClient
     request
 
 processResponse = (response, callback) ->
-  data = ""
+  logger = @logger
+  data   = ""
 
   response.on "data", (chunk) ->
     data += chunk
