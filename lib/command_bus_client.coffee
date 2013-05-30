@@ -46,8 +46,8 @@ class CommandBusClient
       headers =
         "Content-Disposition": "form-data; name=\"args[]\""
         "Content-Type": "application/json"
-      if not Buffer.isBuffer(arg) and not arg.pipe?
-        stream.write headers, JSON.stringify arg
+      if not arg? or (not Buffer.isBuffer(arg) and not arg.pipe?)
+        stream.write headers, JSON.stringify(arg or null)
       else
         headers["Content-Type"] = "application/octet-stream"
         stream.write headers, arg

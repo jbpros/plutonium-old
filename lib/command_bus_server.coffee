@@ -62,6 +62,7 @@ class CommandBusServer
         self.resume()
 
       part.on "end", ->
+
         contentType = part.headers["content-type"]
         data        = Buffer.concat chunks, chunksLength
 
