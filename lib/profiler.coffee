@@ -1,4 +1,4 @@
-microtime = require "microtime"
+microtime = require "microtime-x"
 
 class Profiler
   constructor: (@subject, @logger) ->

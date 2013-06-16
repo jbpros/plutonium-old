@@ -1,5 +1,5 @@
 Logger    = require "devnull"
-microtime = require "microtime"
+microtime = require "microtime-x"
 
 logLevel = process.env.LOG_LEVEL ? 6
 logger = new Logger timestamp: false, level: logLevel
