@@ -83,8 +83,10 @@ class MongoDbEventStore extends Base
       else
         @_instantiateEventsFromRows items, callback
 
-  findAllEventsByAggregateUid: (aggregateUid, callback) ->
-    @_find aggregateUid: aggregateUid, callback
+  findAllEventsByAggregateUid: (aggregateUid, order, callback) ->
+    [order, callback] = [null, order] unless callback?
+
+    @_find aggregateUid: aggregateUid, order, callback
 
   countAllEventsByAggregateUid: (aggregateUid, callback) ->
     @_count aggregateUid: aggregateUid, callback
@@ -184,10 +186,12 @@ class MongoDbEventStore extends Base
       else
         @_instantiateEventsFromRows items, callback
 
-  _find: (params, callback) ->
+  _find: (params, order, callback) ->
+    [order, callback] = [null, order] unless callback?
+
     p = new Profiler "MongoDbEventStore#_find(db request)", @logger
     p.start()
-    @eventCollection.find(params).sort("version":1).toArray (err, items) =>
+    @eventCollection.find(params).sort("version":(order or 1)).toArray (err, items) =>
       p.end()
 
       if err?
