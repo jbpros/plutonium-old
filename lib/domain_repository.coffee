@@ -86,6 +86,9 @@ class DomainRepository
       else
         callback()
 
+  getLastPublishedEvents: () ->
+    @emitter.lastEmittedEvents
+
   findAllEventsByAggregateUid: (aggregateUid, callback) ->
     @store.findAllEventsByAggregateUid aggregateUid, callback
 
@@ -184,7 +187,6 @@ class DomainRepository
       @_publishEventToDirectListeners event, (err) =>
         @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
         @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to event bus"
-        @lastPublishedEvent = event
         if @silent
           callback()
         else
