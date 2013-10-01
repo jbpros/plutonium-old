@@ -10,4 +10,7 @@ class Reporter
     @logger = null
     callback()
 
+  getQueueName: () ->
+  	@eventBusReceiver.queueName
+
 module.exports = Reporter
