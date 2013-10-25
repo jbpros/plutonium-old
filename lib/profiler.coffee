@@ -1,19 +1,16 @@
-microtime = require "microtime"
-
 class Profiler
   constructor: (@subject, @logger) ->
     throw new Error "Missing logger" unless @logger
 
   start: (subject) ->
-    this.startTime = microtime.now()
+    this.startTime = process.hrtime()
 
   end: ({silent} = {}) ->
-    end = microtime.now()
-    @spent = end - @startTime
+    diff = process.hrtime(this.startTime)
+    @spent = (diff[0] * 1e9 + diff[1]) / 1000000
     unless silent
-      spent = "#{_padLeft @spent, 10}µs"
+      spent = "#{_padLeft @spent, 13}ms"
       @logger.debug "profiler", "#{spent} on #{@subject}"
-
 
 _padLeft = (str, length) ->
   str = str.toString()
