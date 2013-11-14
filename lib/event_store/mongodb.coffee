@@ -57,13 +57,13 @@ class MongoDbEventStore extends Base
       (next) =>
         @eventCollection.remove next
       (next) =>
-        @eventCollection.ensureIndex {"aggregateUid": 1}, next
+        @eventCollection.ensureIndex {"entityUid": 1}, next
       (next) =>
-        @eventCollection.ensureIndex {"aggregateUid": 1, "version": 1}, { unique: true }, next
+        @eventCollection.ensureIndex {"entityUid": 1, "version": 1}, { unique: true }, next
       (next) =>
         @snapshotCollection.remove next
       (next) =>
-        @snapshotCollection.ensureIndex {"aggregateUid": 1}, next
+        @snapshotCollection.ensureIndex {"entityUid": 1}, next
     ], callback
 
   createNewUid: (callback) ->
@@ -83,19 +83,19 @@ class MongoDbEventStore extends Base
       else
         @_instantiateEventsFromRows items, callback
 
-  findAllEventsByAggregateUid: (aggregateUid, order, callback) ->
+  findAllEventsByEntityUid: (entityUid, order, callback) ->
     [order, callback] = [null, order] unless callback?
 
-    @_find aggregateUid: aggregateUid, order, callback
+    @_find entityUid: entityUid, order, callback
 
-  countAllEventsByAggregateUid: (aggregateUid, callback) ->
-    @_count aggregateUid: aggregateUid, callback
+  countAllEventsByEntityUid: (entityUid, callback) ->
+    @_count entityUid: entityUid, callback
 
-  findSomeEventsByAggregateUidBeforeVersion: (aggregateUid, version, eventCount, callback) ->
-    @_findLimited { aggregateUid: aggregateUid, version: { "$lte": version } }, eventCount, callback
+  findSomeEventsByEntityUidBeforeVersion: (entityUid, version, eventCount, callback) ->
+    @_findLimited { entityUid: entityUid, version: { "$lte": version } }, eventCount, callback
 
-  findAllEventsByAggregateUidAfterVersion: (aggregateUid, version, callback) ->
-    @_find aggregateUid: aggregateUid, version: { $gt: version }, callback
+  findAllEventsByEntityUidAfterVersion: (entityUid, version, callback) ->
+    @_find entityUid: entityUid, version: { $gt: version }, callback
 
   saveEvent: (event, callback) =>
     @createNewUid (err, eventUid) =>
@@ -104,7 +104,7 @@ class MongoDbEventStore extends Base
       payload =
         uid: eventUid
         name: event.name
-        aggregateUid: event.aggregateUid
+        entityUid: event.entityUid
         timestamp: event.timestamp
         data: {}
         _attachments: {}
@@ -115,7 +115,7 @@ class MongoDbEventStore extends Base
         else
           payload["data"][key] = value
 
-      params  = aggregateUid: event.aggregateUid
+      params  = entityUid: event.entityUid
       options =
         fields:
           version: 1
@@ -143,8 +143,8 @@ class MongoDbEventStore extends Base
               return callback err
             else if (err)
               if (tries == MAX_RETRIES)
-                @logger.critical "MongoDbEventStore#saveEvent", "concurrency situation - Reached maximum retries while persisting event #{eventUid} for aggregate #{event.aggregateUid}"
-                return callback new Error "Reached maximum retries while persisting event #{eventUid} for aggregate #{event.aggregateUid}"
+                @logger.critical "MongoDbEventStore#saveEvent", "concurrency situation - Reached maximum retries while persisting event #{eventUid} for entity #{event.entityUid}"
+                return callback new Error "Reached maximum retries while persisting event #{eventUid} for entity #{event.entityUid}"
               else
                 retryDelay = Math.floor(Math.random() * (MAX_RETRY_DELAY - MIN_RETRY_DELAY + 1)) + MIN_RETRY_DELAY
                 @logger.warning "MongoDbEventStore#saveEvent", "concurrency situation - retrying after #{retryDelay}ms"
@@ -155,8 +155,8 @@ class MongoDbEventStore extends Base
 
       tryToPersist()
 
-  loadSnapshotForAggregateUid: (uid, callback) ->
-    @snapshotCollection.findOne aggregateUid: uid, (err, item) ->
+  loadSnapshotForEntityUid: (uid, callback) ->
+    @snapshotCollection.findOne entityUid: uid, (err, item) ->
       if err?
         callback err
       else if item
@@ -166,11 +166,11 @@ class MongoDbEventStore extends Base
         callback null, null
 
   saveSnapshot: (snapshot, callback) ->
-    @snapshotCollection.update aggregateUid: snapshot.aggregateUid, snapshot, w: 1, upsert: 1, (err) =>
+    @snapshotCollection.update entityUid: snapshot.entityUid, snapshot, w: 1, upsert: 1, (err) =>
       if err?
-        @logger.alert "MongoDbEventStore#saveSnapshot", "failed to save snapshot of aggregate \"#{snapshot.aggregateUid}\": #{err}"
+        @logger.alert "MongoDbEventStore#saveSnapshot", "failed to save snapshot of entity \"#{snapshot.entityUid}\": #{err}"
       else
-        @logger.log "MongoDbEventStore#saveSnapshot", "saved snapshot for aggregate \"#{snapshot.aggregateUid}\""
+        @logger.log "MongoDbEventStore#saveSnapshot", "saved snapshot for entity \"#{snapshot.entityUid}\""
       callback? err
 
   _findLimited: (params, eventCount, callback) ->
@@ -213,7 +213,7 @@ class MongoDbEventStore extends Base
     rowsQueue = async.queue (row, rowCallback) =>
       uid          = row.uid
       name         = row.name
-      aggregateUid = row.aggregateUid
+      entityUid = row.entityUid
       data         = row.data
       timestamp    = row.timestamp
       version      = row.version
@@ -228,7 +228,7 @@ class MongoDbEventStore extends Base
           name: name
           data: data
           uid: uid
-          aggregateUid: aggregateUid
+          entityUid: entityUid
           timestamp: timestamp
           version: version
 

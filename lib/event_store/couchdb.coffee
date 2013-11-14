@@ -31,13 +31,13 @@ class CouchDbEventStore extends Base
         eventViews =
           language: "coffeescript"
           views:
-            byAggregate:
-              map: "(doc) -> if doc.aggregateUid? then emit [doc.aggregateUid, doc.timestamp], doc"
-            #byAggregateEventCount:
-            #  map: "(doc) -> if doc.aggregateUid? then emit doc.aggregateUid, 1"
+            byEntity:
+              map: "(doc) -> if doc.entityUid? then emit [doc.entityUid, doc.timestamp], doc"
+            #byEntityEventCount:
+            #  map: "(doc) -> if doc.entityUid? then emit doc.entityUid, 1"
             #  reduce: "_sum"
             byTimestamp:
-              map: "(doc) -> if doc.aggregateUid? then emit doc.timestamp, doc"
+              map: "(doc) -> if doc.entityUid? then emit doc.timestamp, doc"
         @db.insert eventViews, "_design/events", (err) =>
           next err
     ], (err) =>
@@ -50,8 +50,8 @@ class CouchDbEventStore extends Base
   findAllEvents: (callback) ->
     @_find "byTimestamp", {}, callback
 
-  findAllEventsByAggregateUid: (aggregateUid, callback) ->
-    @_find "byAggregate", { startkey: [aggregateUid], endkey: [aggregateUid, {}] }, callback
+  findAllEventsByEntityUid: (entityUid, callback) ->
+    @_find "byEntity", { startkey: [entityUid], endkey: [entityUid, {}] }, callback
 
   saveEvent: (event, callback) =>
     @createNewUid (err, eventUid) =>
@@ -59,7 +59,7 @@ class CouchDbEventStore extends Base
       event.uid = eventUid
       payload =
         name: event.name
-        aggregateUid: event.aggregateUid
+        entityUid: event.entityUid
         timestamp: event.timestamp
         data: {}
         _attachments: {}
@@ -97,7 +97,7 @@ class CouchDbEventStore extends Base
       value        = row.value
       uid          = row.id
       name         = value.name
-      aggregateUid = value.aggregateUid
+      entityUid = value.entityUid
       data         = value.data
       timestamp    = value.timestamp
 
@@ -109,7 +109,7 @@ class CouchDbEventStore extends Base
           name: name
           data: data
           uid: uid
-          aggregateUid: aggregateUid
+          entityUid: entityUid
           timestamp: timestamp
 
         events.push event

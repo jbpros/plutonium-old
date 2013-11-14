@@ -1,6 +1,6 @@
 class Event
 
-  constructor: ({@name, @data, @uid, @aggregateUid, @timestamp, @version, @replayed}) ->
+  constructor: ({@name, @data, @uid, @entityUid, @timestamp, @version, @replayed}) ->
     throw new Error "Missing name" unless @name
     throw new Error "Missing data" unless @data
 
