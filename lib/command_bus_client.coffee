@@ -27,8 +27,10 @@ class CommandBusClient
 
     stream.end()
 
-  executeCommand: (commandName, args..., callback) ->
+  executeCommand: (command, callback) ->
     logger = @logger
+    commandName = command.getName()
+    commandArgs = command.serialize()
     logger.log "CommandBusClient", "sending command \"#{commandName}\" to localhost:#{@port}..."
 
     request = @_makeRequest path: "/commands"
