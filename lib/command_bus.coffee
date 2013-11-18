@@ -33,8 +33,7 @@ class CommandBus
           callback args...
         p.start()
         commandHandler.apply null, args
-      domainRepository.transact proceed
-      callback null
+      domainRepository.transact proceed, callback
 
   getHandlerForCommand: (commandName, callback) ->
     commandHandler = @commandHandlers[commandName]
