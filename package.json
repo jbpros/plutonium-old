@@ -29,7 +29,8 @@
     "bson": "~0.1.7",
     "multipart": "0.1.5",
     "crypto": "0.0.3",
-    "formidable": "1.0.13"
+    "formidable": "1.0.13",
+    "q": "0.9.7"
   },
   "licenses": [
     {

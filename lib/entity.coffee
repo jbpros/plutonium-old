@@ -1,4 +1,5 @@
 async        = require "async"
+Q            = require "q"
 DomainObject = require "./domain_object"
 inherit      = require "./inherit"
 defer        = require "./defer"
@@ -92,7 +93,10 @@ Entity = (name, finalCtor, Ctor) ->
     defer processNextEvent
 
   Base.findByUid = (uid, callback) ->
-    @$domainRepository.findEntityByUid @, uid, callback
+    deferred = Q.defer()
+    deferred.promise.nodeify callback
+    @$domainRepository.findEntityByUid @, uid, deferred.makeNodeResolver()
+    deferred.promise
 
   Base.findAllEvents = (uid, callback) ->
     @$domainRepository.findAllEventsByEntityUid uid, callback
@@ -102,7 +106,10 @@ Entity = (name, finalCtor, Ctor) ->
     entity.applyEvents events, callback
 
   Base.createNewUid = (callback) ->
-    @$domainRepository.createNewUid callback
+    deferred = Q.defer()
+    deferred.promise.nodeify callback
+    @$domainRepository.createNewUid deferred.makeNodeResolver()
+    deferred.promise
 
   Base._onEvent = (eventName, callback) ->
     eventHandlers[eventName] ?= []
