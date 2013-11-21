@@ -15,6 +15,7 @@ class CommandBus
     @commandHandlers = {}
 
   registerCommandHandler: (command, handler) ->
+    throw new Error "A cmmand named \"#{command}\" is already registered" if @commandHandlers[command]?
     @commandHandlers[command] = handler
 
   createNewUid: (callback) ->
