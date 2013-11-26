@@ -21,19 +21,18 @@ class CommandBus
   createNewUid: (callback) ->
     @domainRepository.createNewUid callback
 
-  executeCommand: (commandName, args..., callback) ->
+  executeCommand: (commandName, payload, callback) ->
     domainRepository = @domainRepository
     logger           = @logger
     @getHandlerForCommand commandName, (err, commandHandler) ->
       return callback err if err?
-
       proceed = (callback) ->
         p = new Profiler "CommandBus#executeCommand(command execution)", logger
-        args.push (args...) ->
+        p.start()
+        commandHandler payload, (args...) ->
           p.end()
           callback args...
-        p.start()
-        commandHandler.apply null, args
+      logger.log "CommandBus#executeCommand", "running command '#{commandName}'"
       domainRepository.transact proceed, callback
 
   getHandlerForCommand: (commandName, callback) ->

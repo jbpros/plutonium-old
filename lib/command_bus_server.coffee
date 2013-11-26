@@ -46,7 +46,7 @@ class CommandBusServer
   _handleCommand: (req, res) ->
     logger = @logger
     commandName = null
-    args = []
+    payload = {}
 
     form = new formidable.IncomingForm();
 
@@ -73,8 +73,9 @@ class CommandBusServer
 
         if part.name is "name" # command name
           commandName = data
-        else if part.name is "args[]"
-          args.push data
+        else if part.name.indexOf("payload.") is 0
+          propertyName = part.name.substring 8
+          payload[propertyName] = data
 
     form.parse req, (err, fields, files) =>
       if err?
@@ -85,7 +86,7 @@ class CommandBusServer
         return djump res, 400, error: new Error "Missing command name"
 
       logger.log "CommandBusServer", "start command \"#{commandName}\""
-      @commandBus.executeCommand commandName, args..., (err) ->
+      @commandBus.executeCommand commandName, payload, (err) ->
         if err?
           logger.alert "CommandBusServer", "error while executing command (#{err})"
           djump res, 500, error: err

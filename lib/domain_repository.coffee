@@ -31,7 +31,7 @@ class DomainRepository
         transaction (err) =>
           p.end()
           if err?
-            @logger.alert "transaction", "failed, rolling back (#{util.inspect(err)})"
+            @logger.alert "transaction", "failed, rolling back (#{err.stack || util.inspect(err)})"
             @_rollback =>
               @logger.log "transaction", "rolled back (#{@transactionQueue.length()} more transaction(s) in queue)"
               @transacting = false

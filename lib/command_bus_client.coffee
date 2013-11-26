@@ -30,7 +30,7 @@ class CommandBusClient
   executeCommand: (command, callback) ->
     logger = @logger
     commandName = command.getName()
-    commandArgs = command.serialize()
+    payload = command.getPayload()
     logger.log "CommandBusClient", "sending command \"#{commandName}\" to localhost:#{@port}..."
 
     request = @_makeRequest path: "/commands"
@@ -44,16 +44,16 @@ class CommandBusClient
 
     stream.write "Content-Disposition": "form-data; name=\"name\"", commandName
 
-    for arg in commandArgs
+    for property, data of payload
       headers =
-        "Content-Disposition": "form-data; name=\"args[]\""
+        "Content-Disposition": "form-data; name=\"payload.#{property}\""
         "Content-Type": "application/json"
-      if not arg? or (not Buffer.isBuffer(arg) and not arg.pipe?)
-        arg = null if arg is undefined
-        stream.write headers, JSON.stringify arg
+      if not data? or (not Buffer.isBuffer(data) and not data.pipe?)
+        data = null if data is undefined
+        stream.write headers, JSON.stringify data
       else
         headers["Content-Type"] = "application/octet-stream"
-        stream.write headers, arg
+        stream.write headers, data
 
     stream.end()
 
