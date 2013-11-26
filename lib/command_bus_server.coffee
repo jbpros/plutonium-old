@@ -85,14 +85,16 @@ class CommandBusServer
         logger.warning "CommandBusServer", "missing command name"
         return djump res, 400, error: new Error "Missing command name"
 
-      logger.log "CommandBusServer", "start command \"#{commandName}\""
-      @commandBus.executeCommand commandName, payload, (err) ->
-        if err?
-          logger.alert "CommandBusServer", "error while executing command (#{err})"
-          djump res, 500, error: err
-        else
-          logger.log "CommandBusServer", "command \"#{commandName}\" started successfully"
-          djump res, 202
+      logger.log "CommandBusServer", "deserialize command \"#{commandName}\""
+      @commandBus.deserializeCommand commandName, payload, (err, command) =>
+        logger.log "CommandBusServer", "start command \"#{commandName}\""
+        @commandBus.executeCommand command, (err) ->
+          if err?
+            logger.alert "CommandBusServer", "error while executing command (#{err})"
+            djump res, 500, error: err
+          else
+            logger.log "CommandBusServer", "command \"#{commandName}\" started successfully"
+            djump res, 202
 
 djump = (res, code, obj) ->
   res.statusCode = code

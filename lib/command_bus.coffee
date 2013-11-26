@@ -14,33 +14,48 @@ class CommandBus
 
     @commandHandlers = {}
 
-  registerCommandHandler: (command, handler) ->
-    throw new Error "A cmmand named \"#{command}\" is already registered" if @commandHandlers[command]?
-    @commandHandlers[command] = handler
+  registerCommandHandler: (commandHandler) ->
+    commandName = commandHandler.getCommandName()
+    throw new Error "A command and its handler for command named \"#{command}\" were already registered" if @commandHandlers[commandName]?
+    @commandHandlers[commandName] = commandHandler
 
   createNewUid: (callback) ->
     @domainRepository.createNewUid callback
 
-  executeCommand: (commandName, payload, callback) ->
+  executeCommand: (command, callback) ->
     domainRepository = @domainRepository
     logger           = @logger
-    @getHandlerForCommand commandName, (err, commandHandler) ->
+    @instantiateHandlerForCommand command, (err, commandHandler) ->
       return callback err if err?
       proceed = (callback) ->
         p = new Profiler "CommandBus#executeCommand(command execution)", logger
         p.start()
-        commandHandler payload, (args...) ->
+        commandHandler.run (args...) ->
           p.end()
           callback args...
-      logger.log "CommandBus#executeCommand", "running command '#{commandName}'"
+      logger.log "CommandBus#executeCommand", "running command '#{command.getName()}'"
       domainRepository.transact proceed, callback
 
-  getHandlerForCommand: (commandName, callback) ->
-    commandHandler = @commandHandlers[commandName]
-    if not commandHandler?
+  deserializeCommand: (commandName, payload, callback) ->
+    @getHandlerForCommandName commandName, (err, CommandHandler) ->
+      return callback err if err?
+      Command = CommandHandler.getCommand()
+      command = new Command payload
+      callback null, command
+
+  instantiateHandlerForCommand: (command, callback) ->
+    commandName = command.getName()
+    @getHandlerForCommandName commandName, (err, CommandHandler) ->
+      return callback err if err?
+      commandHandler = new CommandHandler command
+      callback null, commandHandler
+
+  getHandlerForCommandName: (commandName, callback) ->
+    CommandHandler = @commandHandlers[commandName]
+    if not CommandHandler?
       callback new Error "No handler for command \"#{commandName}\" was found"
     else
-      callback null, commandHandler
+      callback null, CommandHandler
 
   close: (callback) ->
     @server.close callback
