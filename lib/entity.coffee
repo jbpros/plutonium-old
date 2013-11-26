@@ -95,7 +95,10 @@ Entity = (name, finalCtor, Ctor) ->
   Base.findByUid = (uid, callback) ->
     deferred = Q.defer()
     deferred.promise.nodeify callback
-    @$domainRepository.findEntityByUid @, uid, deferred.makeNodeResolver()
+    if uid?
+      @$domainRepository.findEntityByUid @, uid, deferred.makeNodeResolver()
+    else
+      deferred.reject(new Error 'Please provide a UID to find')
     deferred.promise
 
   Base.findAllEvents = (uid, callback) ->
