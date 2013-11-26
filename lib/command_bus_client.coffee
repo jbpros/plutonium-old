@@ -44,7 +44,7 @@ class CommandBusClient
 
     stream.write "Content-Disposition": "form-data; name=\"name\"", commandName
 
-    for arg in args
+    for arg in commandArgs
       headers =
         "Content-Disposition": "form-data; name=\"args[]\""
         "Content-Type": "application/json"
