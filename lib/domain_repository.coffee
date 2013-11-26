@@ -44,10 +44,9 @@ class DomainRepository
               done()
     , 1
 
-  transact: (transaction, callback) ->
+  queueTransaction: (transaction) ->
     @transactionQueue.push transaction
     @logger.log "transaction", "queued (queue size: #{@transactionQueue.length()})"
-    callback null
 
   halt: ({immediately}, callback) ->
     @halted = true

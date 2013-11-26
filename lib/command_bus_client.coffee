@@ -20,8 +20,8 @@ class CommandBusClient
     request.on "error", (err) ->
       callback err
 
-    request.on "response", (response) ->
-      processResponse response, (err, data) ->
+    request.on "response", (response) =>
+      @_processResponse response, (err, data) ->
         return callback err if err?
         callback null, data.uid
 
@@ -39,8 +39,8 @@ class CommandBusClient
     request.on "error", (err) ->
       callback err
 
-    request.on "response", (response) ->
-      processResponse response, callback
+    request.on "response", (response) =>
+      @_processResponse response, callback
 
     stream.write "Content-Disposition": "form-data; name=\"name\"", commandName
 
@@ -75,27 +75,25 @@ class CommandBusClient
     request.stream = stream
     request
 
-processResponse = (response, callback) ->
-  logger = @logger
-  data   = ""
+  _processResponse: (response, callback) ->
+    data = ""
+    logger = @logger
 
-  response.on "data", (chunk) ->
-    data += chunk
+    response.on "data", (chunk) ->
+      data += chunk
 
-  response.on "end", ->
-    succeeded = response.statusCode >= 200 and response.statusCode < 300
-    contentType = response.headers["content-type"]
-    if contentType and contentType.match JSON_MEDIA_TYPE_REGEXP
-      data = JSON.parse data
+    response.on "end", ->
+      succeeded = response.statusCode >= 200 and response.statusCode < 300
+      contentType = response.headers["content-type"]
+      if contentType and contentType.match JSON_MEDIA_TYPE_REGEXP
+        data = JSON.parse data
 
-    if succeeded
-      callback null, data
-    else
-      try data = JSON.parse data
-      error = new Error "Remote command bus error"
-      error.message = data.error || data
-      error.response = response
-      logger.error "CommandBusClient", "command <#{commandName}> failed remotely: #{error.message}"
-      callback error
+      if succeeded
+        callback null, data
+      else
+        try data = JSON.parse data
+        error = data.error
+        logger.error "CommandBusClient", "command failed remotely: #{error.stack || error.message || error}"
+        callback error
 
 module.exports = CommandBusClient

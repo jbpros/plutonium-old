@@ -27,14 +27,36 @@ class CommandBus
     logger           = @logger
     @instantiateHandlerForCommand command, (err, commandHandler) ->
       return callback err if err?
-      proceed = (callback) ->
-        p = new Profiler "CommandBus#executeCommand(command execution)", logger
-        p.start()
-        commandHandler.run (args...) ->
-          p.end()
-          callback args...
-      logger.log "CommandBus#executeCommand", "running command '#{command.getName()}'"
-      domainRepository.transact proceed, callback
+      p = new Profiler "CommandBus#executeCommand(command execution)", logger
+
+      if commandHandler.validate?
+        p1 = new Profiler "CommandBus#executeCommand(validation)", logger
+        p2 = new Profiler "CommandBus#executeCommand(run)", logger
+        transaction = (done) ->
+          p.start()
+          p1.start()
+          commandHandler.validate (err, result) ->
+            p1.end()
+            if err?
+              callback err
+              done err
+              return
+            callback null, result
+            p2.start()
+            commandHandler.run (args...) ->
+              p2.end()
+              p.end()
+              done args...
+      else
+        transaction = (done) ->
+          p.start()
+          commandHandler.run (args...) ->
+            p.end()
+            done args...
+
+      domainRepository.queueTransaction transaction
+      logger.log "CommandBus#executeCommand", "transaction for command '#{command.getName()}' queued"
+      callback null unless commandHandler.validate?
 
   deserializeCommand: (commandName, payload, callback) ->
     @getHandlerForCommandName commandName, (err, CommandHandler) ->
