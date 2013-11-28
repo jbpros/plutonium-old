@@ -96,7 +96,13 @@ Entity = (name, finalCtor, Ctor) ->
     deferred = Q.defer()
     deferred.promise.nodeify callback
     if uid?
-      @$domainRepository.findEntityByUid @, uid, deferred.makeNodeResolver()
+      @$domainRepository.findEntityByUid @, uid, (err, entity) ->
+        if err?
+          deferred.reject err
+        else if not entity
+          deferred.reject new Error "Could not find entity with UID " + uid
+        else
+          deferred.resolve entity
     else
       deferred.reject(new Error 'Please provide a UID to find')
     deferred.promise
