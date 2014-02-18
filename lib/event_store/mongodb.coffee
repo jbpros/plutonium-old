@@ -70,18 +70,22 @@ class MongoDbEventStore extends Base
     uid = uuid.v4()
     callback null, uid
 
-  findAllEvents: (callback) ->
+  findAllEvents: (batchCallback, callback) ->
     p = new Profiler "MongoDbEventStore#_find(db request)", @logger
     p.start()
-    @eventCollection.find({}).sort("timestamp":1).toArray (err, items) =>
-      p.end()
-
-      if err?
-        callback err
-      else if not items?
-        callback null, []
-      else
-        @_instantiateEventsFromRows items, callback
+    cursor = @eventCollection.find({}).sort("timestamp":1)
+    retrieve = =>
+      cursor.nextObject (err, item) =>
+        return callback err if err?
+        if item?
+          @_instantiateEventsFromRows [item], (err, events) ->
+            batchCallback err, events, (err) ->
+              return callback err if err?
+              retrieve()
+        else
+          p.end()
+          callback null
+    retrieve()
 
   findAllEventsByEntityUid: (entityUid, order, callback) ->
     [order, callback] = [null, order] unless callback?
