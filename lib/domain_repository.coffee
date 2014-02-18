@@ -75,16 +75,17 @@ class DomainRepository
     entityInstantiator.findByUid uid, callback
 
   replayAllEvents: (callback) ->
-    @store.findAllEvents (err, events) =>
+    @store.findAllEvents (err, events, batchCallback) =>
       if events.length > 0
         eventQueue = async.queue (event, eventTaskCallback) =>
           event.replayed = true
           @_publishEvent event, eventTaskCallback
         , 1
-        eventQueue.drain = callback
+        eventQueue.drain = batchCallback
         eventQueue.push events
       else
-        callback()
+        batchCallback()
+    , callback
 
   getLastPublishedEvents: () ->
     @emitter.lastEmittedEvents
