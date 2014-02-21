@@ -36,8 +36,7 @@ class CommandBusClient
     request = @_makeRequest path: "/commands"
     stream  = request.stream
 
-    request.on "error", (err) ->
-      callback err
+    request.on "error", callback
 
     request.on "response", (response) =>
       @_processResponse response, callback

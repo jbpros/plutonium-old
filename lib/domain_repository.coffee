@@ -22,6 +22,7 @@ class DomainRepository
     @transactionQueue      = async.queue (transaction, done) =>
       if @halted
         @logger.warning "transaction", "skipped (#{@transactionQueue.length()} more transaction(s) in queue)"
+        transaction.callback() if transaction.callback?
         done()
       else
         @transacting = true
