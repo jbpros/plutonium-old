@@ -43,14 +43,19 @@ class MongoDbEventStore extends Base
 
   destroy: (callback) ->
     @_closeConnectionAndReturn @db, null, (err) =>
+      return callback err if err?
       @db                 = null
       @eventCollection    = null
       @snapshotCollection = null
       callback null
 
   _closeConnectionAndReturn: (db, err, callback) ->
-    db.close() if db?
-    callback err
+    if db?
+      db.close (closeErr) ->
+        return callback closeErr if closeErr?
+        callback err
+    else
+      callback err
 
   setup: (callback) ->
     async.series [
