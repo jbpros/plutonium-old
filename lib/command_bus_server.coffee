@@ -87,7 +87,6 @@ class CommandBusServer
 
       logger.log "CommandBusServer", "deserialize command \"#{commandName}\""
       @commandBus.deserializeCommand commandName, payload, (err, command) =>
-        logger.log "CommandBusServer", "start command \"#{commandName}\""
         @commandBus.executeCommand command, (err) ->
           if err?
             logger.alert "CommandBusServer", "error while executing command (#{err})"
