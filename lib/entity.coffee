@@ -35,9 +35,9 @@ Entity = (name, finalCtor, Ctor) ->
   Base::_initializeAtVersion = (version) ->
     @$version          = version
     @$appliedEvents    = []
-    @$domainRepository = finalCtor.$domainRepository
-    @$commandBus       = finalCtor.$commandBus
-    @$logger           = finalCtor.$logger
+    @$domainRepository = Entity.domainRepository
+    @$commandBus       = Entity.commandBus
+    @$logger           = Entity.logger
 
   Base::_serialize = (contained) ->
     throw new Error "References between entity are forbidden" if contained
