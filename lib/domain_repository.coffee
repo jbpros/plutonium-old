@@ -77,6 +77,7 @@ class DomainRepository
 
   replayAllEvents: (callback) ->
     @store.findAllEventsOneByOne (err, event, eventHandlerCallback) =>
+      event.replayed = true
       @_publishEvent event, eventHandlerCallback
     , callback
 
