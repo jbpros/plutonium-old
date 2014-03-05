@@ -9,10 +9,13 @@ class BaseEventStore
   findAllEvents: (options, callback) ->
     throw new Error "implement me"
 
-  findAllEventsByAggregateUid: (aggregateUid, options, callback) ->
+  findAllEventsOneByOne: (options, callback) ->
+    throw new Error "implement me"
+
+  findAllEventsByEntityUid: (entityUid, options, callback) ->
     throw new Error "Implement me"
 
-  loadSnapshotForAggregateUid: (uid, callback) ->
+  loadSnapshotForEntityUid: (uid, callback) ->
     # implement me if you want snapshots in your store
     callback null, null
 
