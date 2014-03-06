@@ -1,8 +1,8 @@
-async                 = require "async"
-Profiler              = require "./profiler"
-AggregateInstantiator = require "./aggregate_instantiator"
-util                  = require "util"
-defer                 = require "./defer"
+async              = require "async"
+Profiler           = require "./profiler"
+EntityInstantiator = require "./entity_instantiator"
+util               = require "util"
+defer              = require "./defer"
 
 COUCHDB_STORE = "couchdb"
 REDIS_STORE   = "redis"
@@ -13,7 +13,7 @@ class DomainRepository
     throw new Error "Missing store" unless @store?
     throw new Error "Missing event bus emitter" unless @emitter?
     throw new Error "Missing logger" unless @logger?
-    @aggregateEvents       = {}
+    @entityEvents          = {}
     @directListeners       = {}
     @nextDirectListenerKey = 0
     @transacting           = false
@@ -22,6 +22,7 @@ class DomainRepository
     @transactionQueue      = async.queue (transaction, done) =>
       if @halted
         @logger.warning "transaction", "skipped (#{@transactionQueue.length()} more transaction(s) in queue)"
+        transaction.callback() if transaction.callback?
         done()
       else
         @transacting = true
@@ -31,7 +32,7 @@ class DomainRepository
         transaction (err) =>
           p.end()
           if err?
-            @logger.alert "transaction", "failed, rolling back (#{util.inspect(err)})"
+            @logger.alert "transaction", "failed, rolling back (#{err.stack || util.inspect(err)})"
             @_rollback =>
               @logger.log "transaction", "rolled back (#{@transactionQueue.length()} more transaction(s) in queue)"
               @transacting = false
@@ -44,7 +45,7 @@ class DomainRepository
               done()
     , 1
 
-  transact: (transaction) ->
+  queueTransaction: (transaction) ->
     @transactionQueue.push transaction
     @logger.log "transaction", "queued (queue size: #{@transactionQueue.length()})"
 
@@ -67,36 +68,30 @@ class DomainRepository
   createNewUid: (callback) ->
     @store.createNewUid callback
 
-  findAggregateByUid: (AggregateRoot, uid, options, callback) ->
+  findEntityByUid: (Entity, uid, options, callback) ->
     [options, callback] = [{}, options] unless callback?
-    return callback new Error "Missing aggregate root constructor" unless AggregateRoot?
+    return callback new Error "Missing entity root constructor" unless Entity?
     return callback new Error "Missing UID" unless uid?
-    aggregateInstantiator = new AggregateInstantiator store: @store, AggregateRoot: AggregateRoot, logger: @logger
-    aggregateInstantiator.findByUid uid, callback
+    entityInstantiator = new EntityInstantiator store: @store, Entity: Entity, logger: @logger
+    entityInstantiator.findByUid uid, callback
 
   replayAllEvents: (callback) ->
-    @store.findAllEvents (err, events) =>
-      if events.length > 0
-        eventQueue = async.queue (event, eventTaskCallback) =>
-          event.replayed = true
-          @_publishEvent event, eventTaskCallback
-        , 1
-        eventQueue.drain = callback
-        eventQueue.push events
-      else
-        callback()
+    @store.findAllEventsOneByOne (err, event, eventHandlerCallback) =>
+      event.replayed = true
+      @_publishEvent event, eventHandlerCallback
+    , callback
 
   getLastPublishedEvents: () ->
     @emitter.lastEmittedEvents
 
-  findAllEventsByAggregateUid: (aggregateUid, callback) ->
-    @store.findAllEventsByAggregateUid aggregateUid, callback
+  findAllEventsByEntityUid: (entityUid, callback) ->
+    @store.findAllEventsByEntityUid entityUid, callback
 
-  add: (aggregate) ->
-    throw new Error "Aggregate is missing its UID" unless aggregate.uid?
-    @aggregateEvents[aggregate.uid] ?= []
-    addedEvents = @aggregateEvents[aggregate.uid]
-    for event in aggregate.$appliedEvents
+  add: (entity) ->
+    throw new Error "Entity is missing its UID" unless entity.uid?
+    @entityEvents[entity.uid] ?= []
+    addedEvents = @entityEvents[entity.uid]
+    for event in entity.$appliedEvents
       eventAdded = addedEvents.indexOf(event) isnt -1
       addedEvents.push event unless eventAdded # todo: use a Set instead of indexOf?
 
@@ -106,7 +101,7 @@ class DomainRepository
   # Options:
   # * synchronous: Boolean - the event listener is considered synchronous, it will not receive any callbacks
   # * once: Boolean - automatically unregisters the listener after one execution
-  # * forAggregateUid: String - the listener is executed only if the aggregate UID matches the given string
+  # * forEntityUid: String - the listener is executed only if the entity UID matches the given string
   onEvent: (eventName, options, listener) ->
     [eventName, options, listener] = [eventName, {}, options] if not listener?
     @directListeners[eventName] ?= {}
@@ -125,10 +120,10 @@ class DomainRepository
         delete directListeners[directListenerKey]
         oneTimerListener event, callback
 
-    if options.forAggregateUid?
+    if options.forEntityUid?
       scopedListener = listener
       listener = (event, callback) ->
-        if event.aggregateUid is options.forAggregateUid
+        if event.entityUid is options.forEntityUid
           scopedListener event, callback
         else
           callback null
@@ -136,19 +131,19 @@ class DomainRepository
     directListeners[directListenerKey] = listener
 
   _commit: (callback) ->
-    return callback null if Object.keys(@aggregateEvents).length is 0
+    return callback null if Object.keys(@entityEvents).length is 0
 
     savedEvents = [];
 
-    aggregateQueue = async.queue (aggregateAppliedEvents, aggregateTaskCallback) =>
-      firstEvent = aggregateAppliedEvents.shift()
+    entityQueue = async.queue (entityAppliedEvents, entityTaskCallback) =>
+      firstEvent = entityAppliedEvents.shift()
 
       if firstEvent?
         queue = async.queue (event, eventTaskCallback) =>
-          nextEvent = aggregateAppliedEvents.shift()
+          nextEvent = entityAppliedEvents.shift()
           queue.push nextEvent if nextEvent?
 
-          @logger.log "commit", "saving event \"#{event.name}\" for aggregate #{event.aggregateUid}"
+          @logger.log "commit", "saving event \"#{event.name}\" for entity #{event.entityUid}"
           @store.saveEvent event, (err, event) =>
             savedEvents.push(event);
             if err?
@@ -157,14 +152,14 @@ class DomainRepository
               eventTaskCallback null
         , 1
 
-        queue.drain = aggregateTaskCallback
+        queue.drain = entityTaskCallback
         queue.push [firstEvent]
       else
-        aggregateTaskCallback null
+        entityTaskCallback null
 
-    , Infinity # TODO determine if it is safe to treat all aggregates in parallel?
+    , Infinity # TODO determine if it is safe to treat all entitys in parallel?
 
-    aggregateQueue.drain = (err) =>
+    entityQueue.drain = (err) =>
       return callback err if err?
       return callback null unless savedEvents.length > 0
       publicationQueue = async.queue (event, publicationCallback) =>
@@ -173,20 +168,20 @@ class DomainRepository
       publicationQueue.drain = callback
       publicationQueue.push savedEvents
 
-    for aggregateUid, aggregateEvents of @aggregateEvents
-      aggregateQueue.push [aggregateEvents]
-    @aggregateEvents = {}
+    for entityUid, entityEvents of @entityEvents
+      entityQueue.push [entityEvents]
+    @entityEvents = {}
 
   _rollback: (callback) ->
-    @aggregateEvents = {}
+    @entityEvents = {}
     callback()
 
   _publishEvent: (event, callback) ->
     defer =>
-      @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to direct listeners"
+      @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to direct listeners"
       @_publishEventToDirectListeners event, (err) =>
         @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
-        @logger.log "publishEvent", "publishing \"#{event.name}\" from aggregate #{event.aggregateUid} to event bus"
+        @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to event bus"
         if @silent
           callback()
         else
