@@ -100,8 +100,7 @@ Entity = (name, finalCtor, Ctor) ->
         if err?
           deferred.reject err
         else
-          if not entity
-            @$logger.error "findByUid", "Could not find entity with UID #{uid}"
+          @$logger.error "findByUid", "Could not find entity with UID #{uid}" if not entity
           deferred.resolve entity
     else
       deferred.reject(new Error 'Please provide a UID to find')
