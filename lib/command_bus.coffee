@@ -4,11 +4,11 @@ Profiler         = require "./profiler"
 
 class CommandBus
 
-  constructor: ({@domainRepository, @logger, @port}) ->
+  constructor: ({@domainRepository, @logger, @port, @replaying}) ->
     throw new Error "Missing domain repository" unless @domainRepository?
     throw new Error "Missing logger" unless @logger?
 
-    if @port
+    if @port && !@replaying
       @server = new CommandBusServer commandBus: @, port: @port, logger: @logger
       @server.listen @port
 
