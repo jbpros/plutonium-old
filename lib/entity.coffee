@@ -100,10 +100,10 @@ Entity = (name, finalCtor, Ctor) ->
         if err?
           deferred.reject err
         else
-          @$logger.error "findByUid", "Could not find entity with UID #{uid}" if not entity
+          @$logger.error "findByUid", "Could not find entity <#{name}> with UID #{uid}" if not entity
           deferred.resolve entity
     else
-      deferred.reject(new Error 'Please provide a UID to find')
+      deferred.reject(new Error "Please provide a UID to find")
     deferred.promise
 
   Base.findAllEvents = (uid, callback) ->
