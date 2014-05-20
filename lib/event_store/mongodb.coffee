@@ -62,13 +62,15 @@ class MongoDbEventStore extends Base
       (next) =>
         @eventCollection.remove next
       (next) =>
-        @eventCollection.ensureIndex {"entityUid": 1}, next
+        @eventCollection.ensureIndex {entityUid: 1}, next
       (next) =>
-        @eventCollection.ensureIndex {"entityUid": 1, "version": 1}, { unique: true }, next
+        @eventCollection.ensureIndex {entityUid: 1, version: 1}, { unique: true }, next
+      (next) =>
+        @eventCollection.ensureIndex {timestamp: 1, uid: 1}, next
       (next) =>
         @snapshotCollection.remove next
       (next) =>
-        @snapshotCollection.ensureIndex {"entityUid": 1}, next
+        @snapshotCollection.ensureIndex {entityUid: 1}, next
     ], callback
 
   createNewUid: (callback) ->
