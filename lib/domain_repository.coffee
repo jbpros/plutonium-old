@@ -78,6 +78,7 @@ class DomainRepository
   replayAllEvents: (options, callback) ->
     return callback new Error("Replay mode not set") unless @replaying
     [options, callback] = [{}, options] unless callback?
+    lastEvent = null
 
     @store.findAllEventsOneByOne options, (err, event, eventHandlerCallback) =>
       return callback err if err?
