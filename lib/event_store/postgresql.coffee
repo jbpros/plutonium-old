@@ -33,6 +33,18 @@ class PostgresqlEventStore extends Base
     pgCallback(pgClient)
     callback(err)
 
+  _dropEventTable: (callback) ->
+    pg.connect @uri, (err, client, done) =>
+      return @_handleError(err, client, done, callback) if err?
+
+      query = "DROP TABLE IF EXISTS %s;"
+      query = format query, @eventTableName
+
+      client.query query, (err) =>
+        return @_handleError(err, client, done, callback) if err?
+        done()
+        callback()
+
   _createEventTable: (callback) ->
     pg.connect @uri, (err, client, done) =>
       return @_handleError(err, client, done, callback) if err?
@@ -61,6 +73,18 @@ class PostgresqlEventStore extends Base
       query = "DROP INDEX IF EXISTS %s;
               CREATE INDEX ON %s (entity_uid);"
       query = format query, indexName, @eventTableName
+
+      client.query query, (err) =>
+        return @_handleError(err, client, done, callback) if err?
+        done()
+        callback()
+
+  _dropSnapshotTable: (callback) ->
+    pg.connect @uri, (err, client, done) =>
+      return @_handleError(err, client, done, callback) if err?
+
+      query = "DROP TABLE IF EXISTS %s;"
+      query = format query, @snapshotTableName
 
       client.query query, (err) =>
         return @_handleError(err, client, done, callback) if err?
@@ -98,18 +122,6 @@ class PostgresqlEventStore extends Base
         done()
         callback null
 
-  _emptySnapshotTable: (callback) ->
-    pg.connect @uri, (err, client, done) =>
-      return @_handleError(err, client, done, callback) if err?
-
-      query = "TRUNCATE TABLE %s RESTART IDENTITY;"
-      query = format query, @snapshotTableName
-
-      client.query query, (err) =>
-        return @_handleError(err, client, done, callback) if err?
-        done()
-        callback null
-
   _addAutoIncrementOnEventVersion: (callback) ->
     pg.connect @uri, (err, client, done) =>
       return @_handleError(err, client, done, callback) if err?
@@ -136,7 +148,6 @@ class PostgresqlEventStore extends Base
                   BEFORE INSERT ON events
                   FOR EACH ROW WHEN (NEW.version IS NULL)
                   EXECUTE PROCEDURE events_version_auto_increment();"
-      #query = format query, @eventTableName, @eventTableName, @eventTableName
 
       client.query query, (err) =>
         return @_handleError(err, client, done, callback) if err?
@@ -150,6 +161,9 @@ class PostgresqlEventStore extends Base
     console.log "Setup postgresql event store"
     async.series [
       (next) =>
+        console.log "Dropping event table"
+        @_dropEventTable next
+      (next) =>
         console.log "Creating event table"
         @_createEventTable next
       (next) =>
@@ -159,14 +173,14 @@ class PostgresqlEventStore extends Base
         console.log "Adding auto increment on event table"
         @_addAutoIncrementOnEventVersion next
       (next) =>
+        console.log "Dropping snapshot table"
+        @_dropSnapshotTable next
+      (next) =>
         console.log "Creating snapshot table"
         @_createSnapshotTable next
       (next) =>
         console.log "Creating index on snapshot table"
         @_createIndexOnSnapshotTable next
-      (next) =>
-        console.log "Emptying snapshot table"
-        @_emptySnapshotTable next
     ], callback
 
   findAllEventsOneByOne: (eventHandler, callback) ->
