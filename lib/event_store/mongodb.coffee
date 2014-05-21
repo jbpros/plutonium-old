@@ -22,6 +22,10 @@ class MongoDbEventStore extends Base
     @eventCollectionName    = "events"
     @snapshotCollectionName = "snapshots"
 
+  createNewUid: (callback) ->
+    uid = uuid.v4()
+    callback null, uid
+
   initialize: (callback) ->
     async.waterfall [
       (next) =>

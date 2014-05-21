@@ -156,8 +156,8 @@ class DomainRepository
 
           @logger.log "commit", "saving event \"#{event.name}\" for entity #{event.entityUid}"
           @store.saveEvent event, (err, event) ->
-            savedEvents.push event
             return callback err if err?
+            savedEvents.push event
             eventTaskCallback null
         , 1
 
