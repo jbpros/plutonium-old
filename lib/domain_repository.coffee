@@ -39,7 +39,8 @@ class DomainRepository
               done()
           else
             @logger.log "transaction", "succeeded, comitting"
-            @_commit =>
+            @_commit (err) =>
+              throw err if err?
               @logger.log "transaction", "committed (#{@transactionQueue.length()} more transaction(s) in queue)"
               @transacting = false
               done()
@@ -149,16 +150,15 @@ class DomainRepository
 
       if firstEvent?
         queue = async.queue (event, eventTaskCallback) =>
+          console.log "@@@ commit", event
           nextEvent = entityAppliedEvents.shift()
           queue.push nextEvent if nextEvent?
 
           @logger.log "commit", "saving event \"#{event.name}\" for entity #{event.entityUid}"
-          @store.saveEvent event, (err, event) =>
-            savedEvents.push(event);
-            if err?
-              eventTaskCallback err
-            else
-              eventTaskCallback null
+          @store.saveEvent event, (err, event) ->
+            savedEvents.push event
+            return callback err if err?
+            eventTaskCallback null
         , 1
 
         queue.drain = entityTaskCallback
@@ -168,8 +168,7 @@ class DomainRepository
 
     , Infinity # TODO determine if it is safe to treat all entitys in parallel?
 
-    entityQueue.drain = (err) =>
-      return callback err if err?
+    entityQueue.drain = =>
       return callback null unless savedEvents.length > 0
       publicationQueue = async.queue (event, publicationCallback) =>
         @_publishEvent event, publicationCallback

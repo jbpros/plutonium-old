@@ -205,7 +205,7 @@ class MongoDbEventStore extends Base
         @logger.alert "MongoDbEventStore#saveSnapshot", "failed to save snapshot of entity \"#{snapshot.entityUid}\": #{err}"
       else
         @logger.log "MongoDbEventStore#saveSnapshot", "saved snapshot for entity \"#{snapshot.entityUid}\""
-      callback? err
+      callback err
 
   _findLimited: (params, eventCount, callback) ->
     p = new Profiler "MongoDbEventStore#_findLimited(db request)", @logger
