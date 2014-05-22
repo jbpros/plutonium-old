@@ -281,6 +281,14 @@ class PostgresqlEventStore extends Base
 
     @_find params, order, callback
 
+  escapeString: (string) ->
+    return "NULL" if string is null
+    hasBackSlash = ~string.indexOf "\\"
+    prefix = if hasBackSlash then "E" else ""
+    string = string.replace /'/g, "''"
+    string = string.replace /\\/g, "\\\\"
+    prefix + "'" + string + "'"
+
   saveEvent: (event, callback) =>
     console.log "&&&", "saveEvent", event
     p = new Profiler "PostgresqlEventStore#saveEvent (db request)", @logger
@@ -295,11 +303,14 @@ class PostgresqlEventStore extends Base
       else
         data[key] = value
 
+    data        = JSON.stringify data
+    attachments = JSON.stringify attachments
+
     pg.connect @uri, (err, client, done) =>
       return @_handleError(err, client, done, callback) if err?
 
-      query = "INSERT INTO %s (name, entity_uid, timestamp, data, attachments) VALUES ('%s', '%s', %d, '%j', '%j');"
-      query = format query, @eventTableName, event.name, event.entityUid, event.timestamp, data, attachments
+      query = "INSERT INTO %s (name, entity_uid, timestamp, data, attachments) VALUES (%s, %s, %d, %s, %s);"
+      query = format query, @eventTableName, @escapeString(event.name), @escapeString(event.entityUid), event.timestamp, @escapeString(data), @escapeString(attachments)
 
       clientReceiver = client.query query, (err, results) =>
         p.end()
@@ -348,8 +359,12 @@ class PostgresqlEventStore extends Base
     pg.connect @uri, (err, client, done) =>
       return @_handleError(err, client, done, callback) if err?
 
-      query = "WITH upsert AS (UPDATE %s SET version=%d, contents='%j' WHERE entity_uid='%s' RETURNING *) INSERT INTO %s (version, contents, entity_uid) SELECT %d, '%j', '%s' WHERE NOT EXISTS (SELECT * FROM upsert);"
-      query = format query, @snapshotTableName, snapshot.version, snapshot.contents, snapshot.entityUid, @snapshotTableName, snapshot.version, snapshot.contents, snapshot.entityUid
+      version   = snapshot.version
+      contents  = JSON.stringify(snapshot.contents)
+      entityUid = snapshot.entityUid
+
+      query = "WITH upsert AS (UPDATE %s SET version=%d, contents=%s WHERE entity_uid=%s RETURNING *) INSERT INTO %s (version, contents, entity_uid) SELECT %d, %s, %s WHERE NOT EXISTS (SELECT * FROM upsert);"
+      query = format query, @snapshotTableName, version, @escapeString(contents), @escapeString(entityUid), @snapshotTableName, version, @escapeString(contents), @escapeString(entityUid)
 
       console.log "--- query", query
 
