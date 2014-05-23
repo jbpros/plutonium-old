@@ -81,45 +81,49 @@ class MongoDbEventStore extends Base
     uid = uuid.v4()
     callback null, uid
 
-  findAllEventsOneByOne: (options, eventHandler, callback) ->
+  iterateOverAllEvents: (options, eventHandler, callback) ->
     [options, eventHandler, callback] = [{}, options, eventHandler] unless callback?
 
-    query = {}
+    query     = {}
     sortQuery =
       timestamp: 1
       uid: 1
-
-    doFindAll = =>
-      p = new Profiler "MongoDbEventStore#_find(db request)", @logger
-      p.start()
-
-      cursor = @eventCollection.find(query).sort(sortQuery)
-      retrieve = =>
-        cursor.nextObject (err, item) =>
-          return callback err if err?
-          if item?
-            @_instantiateEventFromRow item, (err, event) ->
-              eventHandler err, event, (err) ->
-                return callback err if err?
-                retrieve()
-          else
-            p.end()
-            callback null
-      retrieve()
 
     startUid = options.startUid
     if startUid?
       @eventCollection.findOne uid: startUid, (err, event) ->
         return callback err if err?
-        startTimestamp = event.timestamp
+
         query =
           timestamp:
-            $gte: startTimestamp
+            $gte: event.timestamp
           uid:
             $ne: startUid
-        doFindAll()
+
+        @_iterateOverEvents query, sortQuery, eventHandler, callback
     else
-      doFindAll()
+      @_iterateOverEvents query, sortQuery, eventHandler, callback
+
+  iterateOverEntityEventsAfterVersion: (entityUid, version, eventHandler, callback) ->
+    @_iterateOverEvents {entityUid: entityUid, version: {$gt: version}}, {version:1}, eventHandler, callback
+
+  _iterateOverEvents: (params, order, eventHandler, callback) ->
+    p = new Profiler "MongoDbEventStore#_iterateOverEvents(db request)", @logger
+    p.start()
+    cursor = @eventCollection.find(params).sort(order)
+    retrieve = =>
+      cursor.nextObject (err, item) =>
+        return callback err if err?
+        if item?
+          @_instantiateEventFromRow item, (err, event) ->
+            return callback err if err?
+            eventHandler event, (err) ->
+              return callback err if err?
+              retrieve()
+        else
+          p.end()
+          callback null
+    retrieve()
 
   findAllEventsByEntityUid: (entityUid, order, callback) ->
     [order, callback] = [null, order] unless callback?
@@ -131,9 +135,6 @@ class MongoDbEventStore extends Base
 
   findSomeEventsByEntityUidBeforeVersion: (entityUid, version, eventCount, callback) ->
     @_findLimited { entityUid: entityUid, version: { "$lte": version } }, eventCount, callback
-
-  findAllEventsByEntityUidAfterVersion: (entityUid, version, callback) ->
-    @_find entityUid: entityUid, version: { $gt: version }, callback
 
   saveEvent: (event, callback) =>
     @createNewUid (err, eventUid) =>

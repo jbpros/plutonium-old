@@ -183,15 +183,27 @@ class PostgresqlEventStore extends Base
         @_createIndexOnSnapshotTable next
     ], callback
 
-  findAllEventsOneByOne: (eventHandler, callback) ->
-    p = new Profiler "PostgresqlEventStore#_findAllEventsOneByOne (db request)", @logger
+  iterateOverAllEvents: (eventHandler, callback) ->
+    @_iterateOverEvents null, eventHandler, callback
+
+  iterateOverEntityEventsAfterVersion: (entityUid, version, eventHandler, callback) ->
+    @_iterateOverEvents "entity_uid='#{entityUid}' AND version > #{version}", eventHandler, callback
+
+  _iterateOverEvents: (params, eventHandler, callback) ->
+    p = new Profiler "PostgresqlEventStore#_iterateOverEvents (db request)", @logger
     p.start()
 
     pg.connect @uri, (err, client, done) =>
       return @_handleError(err, client, done, callback) if err?
 
-      query = "FIND * FROM %s ORDER BY id ASC;"
-      query = format query, @eventTableName
+      query  = "FIND * FROM %s"
+      query += " WHERE %s" if params?
+      query += " ORDER BY id ASC;"
+
+      if params?
+        query = format query, @eventTableName, params
+      else
+        query = format query, @eventTableName
 
       clientReceiver = client.query query
 
@@ -200,7 +212,9 @@ class PostgresqlEventStore extends Base
 
       clientReceiver.on "row", (row) =>
         @_instantiateEventFromRow row, (err, event) ->
-          eventHandler err, event, (err) ->
+          return @_handleError(err, client, done, callback) if err?
+
+          eventHandler event, (err) ->
             return @_handleError(err, client, done, callback) if err?
 
       clientReceiver.on "end", (results) =>
@@ -275,12 +289,6 @@ class PostgresqlEventStore extends Base
 
     @_find params, order, eventCount, callback
 
-  findAllEventsByEntityUidAfterVersion: (entityUid, version, callback) ->
-    params = "entity_uid='#{entityUid}' AND version > #{version}"
-    order  = "ASC"
-
-    @_find params, order, callback
-
   escapeString: (string) ->
     return "NULL" if string is null
     hasBackSlash = ~string.indexOf "\\"
@@ -339,8 +347,6 @@ class PostgresqlEventStore extends Base
         snapshot    = null
 
         if rawSnapshot?
-          console.log "-- raw snapshot --", typeof rawSnapshot.contents, rawSnapshot.contents
-
           snapshotAttributes =
             version   : rawSnapshot.version
             entityUid : rawSnapshot.entity_uid

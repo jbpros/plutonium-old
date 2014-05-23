@@ -76,13 +76,13 @@ class DomainRepository
     entityInstantiator = new EntityInstantiator store: @store, Entity: Entity, logger: @logger
     entityInstantiator.findByUid uid, callback
 
-  replayAllEvents: (options, callback) ->
+  replayAllEvents: (callback) ->
     return callback new Error("Replay mode not set") unless @replaying
-    [options, callback] = [{}, options] unless callback?
-    lastEvent = null
 
-    @store.findAllEventsOneByOne options, (err, event, eventHandlerCallback) =>
-      return callback err if err?
+    [options, callback] = [{}, options] unless callback?
+    lastEvent           = null
+
+    @store.iterateOverAllEvents options, (event, eventHandlerCallback) =>
       event.replayed = true
       lastEvent      = event
       @_publishEvent event, eventHandlerCallback
@@ -150,7 +150,6 @@ class DomainRepository
 
       if firstEvent?
         queue = async.queue (event, eventTaskCallback) =>
-          console.log "@@@ commit", event
           nextEvent = entityAppliedEvents.shift()
           queue.push nextEvent if nextEvent?
 
@@ -188,23 +187,26 @@ class DomainRepository
     defer =>
       @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to direct listeners"
       @_publishEventToDirectListeners event, (err) =>
-        @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
+        @logger.error "publishEvent", "a direct listener failed: #{err}" if err?
         @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to event bus"
         if @silent
           callback()
         else
           @emitter.emit event, (err) =>
-            @logger.log "publishEvent", "event publication failed: #{err}" if err?
+            @logger.error "publishEvent", "event publication failed: #{err}" if err?
             callback err
 
   _publishEventToDirectListeners: (event, callback) ->
     directListeners = @directListeners[event.name]
 
-    queue = async.queue (directListener, callback) ->
-      directListener event, callback
+    queue = async.queue (directListener, taskCallback) ->
+      directListener event, (err) ->
+        return callback err if err?
+        taskCallback()
     , Infinity
 
     queue.drain = callback
+
     queuedListeners = false
     for _, directListener of directListeners
       queuedListeners = true unless queuedListeners

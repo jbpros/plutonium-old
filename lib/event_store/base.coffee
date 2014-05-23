@@ -9,7 +9,7 @@ class BaseEventStore
   findAllEvents: (options, callback) ->
     throw new Error "implement me"
 
-  findAllEventsOneByOne: (options, callback) ->
+  iterateOverAllEvents: (options, callback) ->
     throw new Error "implement me"
 
   findAllEventsByEntityUid: (entityUid, options, callback) ->
