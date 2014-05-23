@@ -196,10 +196,13 @@ class PostgresqlEventStore extends Base
     p = new Profiler "PostgresqlEventStore#_iterateOverEvents (db request)", @logger
     p.start()
 
+    treatedRows  = 0
+    affectedRows = undefined
+
     pg.connect @uri, (err, client, done) =>
       return @_handleError(err, client, done, callback) if err?
 
-      query  = "FIND * FROM %s"
+      query  = "SELECT * FROM %s"
       query += " WHERE %s" if params?
       query += " ORDER BY id ASC;"
 
@@ -220,10 +223,17 @@ class PostgresqlEventStore extends Base
           eventHandler event, (err) ->
             return @_handleError(err, client, done, callback) if err?
 
+            treatedRows++
+            if treatedRows is affectedRows
+              return callback null
+
       clientReceiver.on "end", (results) =>
-        p.end()
+        affectedRows = results.rowCount
         done()
-        callback null
+
+        if treatedRows is affectedRows
+          p.end()
+          return callback null
 
   findAllEvents: (options, callback) ->
     params = true
