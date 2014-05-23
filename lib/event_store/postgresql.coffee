@@ -189,6 +189,9 @@ class PostgresqlEventStore extends Base
   iterateOverEntityEventsAfterVersion: (entityUid, version, eventHandler, callback) ->
     @_iterateOverEvents "entity_uid='#{entityUid}' AND version > #{version}", eventHandler, callback
 
+  iterateOverEntityEvents: (entityUid, eventHandler, callback) ->
+    @_iterateOverEvents "entity_uid='#{entityUid}'", eventHandler, callback
+
   _iterateOverEvents: (params, eventHandler, callback) ->
     p = new Profiler "PostgresqlEventStore#_iterateOverEvents (db request)", @logger
     p.start()

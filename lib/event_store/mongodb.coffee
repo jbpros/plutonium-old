@@ -107,6 +107,9 @@ class MongoDbEventStore extends Base
   iterateOverEntityEventsAfterVersion: (entityUid, version, eventHandler, callback) ->
     @_iterateOverEvents {entityUid: entityUid, version: {$gt: version}}, {version:1}, eventHandler, callback
 
+  iterateOverEntityEvents: (entityUid, eventHandler, callback) ->
+    @_iterateOverEvents {entityUid: entityUid}, {version:1}, eventHandler, callback
+
   _iterateOverEvents: (params, order, eventHandler, callback) ->
     p = new Profiler "MongoDbEventStore#_iterateOverEvents(db request)", @logger
     p.start()
