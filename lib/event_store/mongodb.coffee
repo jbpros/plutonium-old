@@ -62,35 +62,58 @@ class MongoDbEventStore extends Base
       (next) =>
         @eventCollection.remove next
       (next) =>
-        @eventCollection.ensureIndex {"entityUid": 1}, next
+        @eventCollection.ensureIndex {entityUid: 1}, next
       (next) =>
-        @eventCollection.ensureIndex {"entityUid": 1, "version": 1}, { unique: true }, next
+        @eventCollection.ensureIndex {entityUid: 1, version: 1}, { unique: true }, next
+      (next) =>
+        @eventCollection.ensureIndex {timestamp: 1, uid: 1}, next
       (next) =>
         @snapshotCollection.remove next
       (next) =>
-        @snapshotCollection.ensureIndex {"entityUid": 1}, next
+        @snapshotCollection.ensureIndex {entityUid: 1}, next
     ], callback
 
   createNewUid: (callback) ->
     uid = uuid.v4()
     callback null, uid
 
-  findAllEventsOneByOne: (eventHandler, callback) ->
-    p = new Profiler "MongoDbEventStore#_find(db request)", @logger
-    p.start()
-    cursor = @eventCollection.find({}).sort("timestamp":1)
-    retrieve = =>
-      cursor.nextObject (err, item) =>
+  findAllEventsOneByOne: (options, eventHandler, callback) ->
+    [options, eventHandler, callback] = [{}, options, eventHandler] unless callback?
+
+    query = {}
+    sortQuery =
+      timestamp: 1
+      uid: 1
+
+    doFindAll = =>
+      p = new Profiler "MongoDbEventStore#_find(db request)", @logger
+      p.start()
+      cursor = @eventCollection.find(query).sort(sortQuery)
+      retrieve = =>
+        cursor.nextObject (err, item) =>
+          return callback err if err?
+          if item?
+            @_instantiateEventFromRow item, (err, event) ->
+              eventHandler err, event, (err) ->
+                return callback err if err?
+                retrieve()
+          else
+            p.end()
+            callback null
+      retrieve()
+
+    if options.startUid?
+      @eventCollection.findOne({uid: options.startUid}).sort sortQuery, (err, event) ->
         return callback err if err?
-        if item?
-          @_instantiateEventFromRow item, (err, event) ->
-            eventHandler err, event, (err) ->
-              return callback err if err?
-              retrieve()
-        else
-          p.end()
-          callback null
-    retrieve()
+        startTimestamp = event.timestamp
+        query =
+          timestamp:
+            $gte: startTimestamp
+          uid:
+            $ne: startUid
+        doFindAll()
+    else
+      doFindAll()
 
   findAllEventsByEntityUid: (entityUid, order, callback) ->
     [order, callback] = [null, order] unless callback?

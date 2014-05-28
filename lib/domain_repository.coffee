@@ -9,7 +9,7 @@ REDIS_STORE   = "redis"
 
 class DomainRepository
 
-  constructor: ({@store, @emitter, @logger}) ->
+  constructor: ({@store, @emitter, @logger, @replaying}) ->
     throw new Error "Missing store" unless @store?
     throw new Error "Missing event bus emitter" unless @emitter?
     throw new Error "Missing logger" unless @logger?
@@ -75,11 +75,19 @@ class DomainRepository
     entityInstantiator = new EntityInstantiator store: @store, Entity: Entity, logger: @logger
     entityInstantiator.findByUid uid, callback
 
-  replayAllEvents: (callback) ->
-    @store.findAllEventsOneByOne (err, event, eventHandlerCallback) =>
+  replayAllEvents: (options, callback) ->
+    return callback new Error("Replay mode not set") unless @replaying
+    [options, callback] = [{}, options] unless callback?
+    lastEvent = null
+
+    @store.findAllEventsOneByOne options, (err, event, eventHandlerCallback) =>
+      return callback err if err?
       event.replayed = true
+      lastEvent      = event
       @_publishEvent event, eventHandlerCallback
-    , callback
+    , (err) ->
+      return callback err if err?
+      callback null, lastEvent
 
   getLastPublishedEvents: () ->
     @emitter.lastEmittedEvents
@@ -88,6 +96,7 @@ class DomainRepository
     @store.findAllEventsByEntityUid entityUid, callback
 
   add: (entity) ->
+    throw new Error "Cannot write during replay" if @replaying
     throw new Error "Entity is missing its UID" unless entity.uid?
     @entityEvents[entity.uid] ?= []
     addedEvents = @entityEvents[entity.uid]
