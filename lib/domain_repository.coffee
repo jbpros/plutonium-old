@@ -194,7 +194,7 @@ class DomainRepository
       @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to direct listeners"
       @_publishEventToDirectListeners event, (err) =>
         if err?
-          @logger.log "publishEvent", "a direct listener failed: #{err}" if err?
+          @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
           return callback err
 
         @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to event bus"
@@ -202,7 +202,7 @@ class DomainRepository
           callback()
         else
           @emitter.emit event, (err) =>
-            @logger.error "publishEvent", "event publication failed: #{err}" if err?
+            @logger.warn "publishEvent", "event publication failed: #{err}" if err?
             callback err
 
   _publishEventToDirectListeners: (event, callback) ->
