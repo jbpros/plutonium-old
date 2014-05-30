@@ -77,7 +77,7 @@ class DomainRepository
     entityInstantiator = new EntityInstantiator store: @store, Entity: Entity, logger: @logger
     entityInstantiator.findByUid uid, callback
 
-  replayAllEvents: (callback) ->
+  replayAllEvents: (options, callback) ->
     return callback new Error("Replay mode not set") unless @replaying
 
     [options, callback] = [{}, options] unless callback?
