@@ -13,6 +13,7 @@ class DomainRepository
     throw new Error "Missing store" unless @store?
     throw new Error "Missing event bus emitter" unless @emitter?
     throw new Error "Missing logger" unless @logger?
+
     @entityEvents          = {}
     @directListeners       = {}
     @nextDirectListenerKey = 0
@@ -169,14 +170,19 @@ class DomainRepository
 
     entityQueue.drain = =>
       return callback null unless savedEvents.length > 0
+
       publicationQueue = async.queue (event, publicationCallback) =>
-        @_publishEvent event, publicationCallback
+        @_publishEvent event, (err) ->
+          return callback err if err?
+          publicationCallback()
       , Infinity
+
       publicationQueue.drain = callback
       publicationQueue.push savedEvents
 
     for entityUid, entityEvents of @entityEvents
       entityQueue.push [entityEvents]
+
     @entityEvents = {}
 
   _rollback: (callback) ->
@@ -187,7 +193,8 @@ class DomainRepository
     defer =>
       @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to direct listeners"
       @_publishEventToDirectListeners event, (err) =>
-        @logger.error "publishEvent", "a direct listener failed: #{err}" if err?
+        return callback err if err?
+
         @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to event bus"
         if @silent
           callback()
