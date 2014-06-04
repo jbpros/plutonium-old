@@ -198,6 +198,7 @@ class PostgresqlEventStore extends Base
 
     treatedRows  = 0
     affectedRows = undefined
+    returned     = false
 
     pg.connect @uri, (err, client, done) =>
       return @_handleError(err, client, done, callback) if err?
@@ -224,15 +225,18 @@ class PostgresqlEventStore extends Base
             return @_handleError(err, client, done, callback) if err?
 
             treatedRows++
-            if treatedRows is affectedRows
+            if treatedRows is affectedRows and not returned
+              p.end()
+              returned = true
               return callback null
 
       clientReceiver.on "end", (results) =>
         affectedRows = results.rowCount
         done()
 
-        if treatedRows is affectedRows
+        if treatedRows is affectedRows and not returned
           p.end()
+          returned = true
           return callback null
 
   findAllEvents: (options, callback) ->
