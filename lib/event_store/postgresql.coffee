@@ -268,7 +268,6 @@ class PostgresqlEventStore extends Base
         return @_handleError(err, client, done, callback) if err?
         done()
         @_instantiateEventsFromRows results.rows, (err, events) ->
-          console.log "-- _find", query, err, events
           callback err, events
 
   _count: (params, callback) ->
@@ -315,7 +314,6 @@ class PostgresqlEventStore extends Base
     prefix + "'" + string + "'"
 
   saveEvent: (event, callback) =>
-    console.log "&&&", "saveEvent", event
     p = new Profiler "PostgresqlEventStore#saveEvent (db request)", @logger
     p.start()
 
@@ -374,8 +372,6 @@ class PostgresqlEventStore extends Base
         callback null, snapshot
 
   saveSnapshot: (snapshot, callback) ->
-    console.log "-- saveSnapshot", snapshot
-
     p = new Profiler "PostgresqlEventStore#saveSnapshot (db request)", @logger
     p.start()
 
@@ -389,10 +385,7 @@ class PostgresqlEventStore extends Base
       query = "WITH upsert AS (UPDATE %s SET version=%d, contents=%s WHERE entity_uid=%s RETURNING *) INSERT INTO %s (version, contents, entity_uid) SELECT %d, %s, %s WHERE NOT EXISTS (SELECT * FROM upsert);"
       query = format query, @snapshotTableName, version, @escapeString(contents), @escapeString(entityUid), @snapshotTableName, version, @escapeString(contents), @escapeString(entityUid)
 
-      console.log "--- query", query
-
       clientReceiver = client.query query, (err, results) =>
-        console.log "--- saveSnapshot err", err
         p.end()
         return @_handleError(err, client, done, callback) if err?
         done()
@@ -415,8 +408,6 @@ class PostgresqlEventStore extends Base
     rowsQueue.push rows
 
   _instantiateEventFromRow: (row, callback) ->
-    console.log "--- instantiate event ---", typeof row.data, row.data
-
     data =
       uid         : row.id
       name        : row.name
