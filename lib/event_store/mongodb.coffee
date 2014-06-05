@@ -88,6 +88,7 @@ class MongoDbEventStore extends Base
     doFindAll = =>
       p = new Profiler "MongoDbEventStore#_find(db request)", @logger
       p.start()
+
       cursor = @eventCollection.find(query).sort(sortQuery)
       retrieve = =>
         cursor.nextObject (err, item) =>
@@ -102,8 +103,9 @@ class MongoDbEventStore extends Base
             callback null
       retrieve()
 
-    if options.startUid?
-      @eventCollection.findOne({uid: options.startUid}).sort sortQuery, (err, event) ->
+    startUid = options.startUid
+    if startUid?
+      @eventCollection.findOne uid: startUid, (err, event) ->
         return callback err if err?
         startTimestamp = event.timestamp
         query =
