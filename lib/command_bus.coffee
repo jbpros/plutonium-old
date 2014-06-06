@@ -16,7 +16,7 @@ class CommandBus
 
   registerCommandHandler: (commandHandler) ->
     commandName = commandHandler.getCommandName()
-    throw new Error "A command and its handler for command named \"#{command}\" were already registered" if @commandHandlers[commandName]?
+    throw new Error "A command and its handler for command named \"#{commandName}\" were already registered" if @commandHandlers[commandName]?
     @commandHandlers[commandName] = commandHandler
 
   createNewUid: (callback) ->
