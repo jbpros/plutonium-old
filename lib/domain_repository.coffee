@@ -13,6 +13,7 @@ class DomainRepository
     throw new Error "Missing store" unless @store?
     throw new Error "Missing event bus emitter" unless @emitter?
     throw new Error "Missing logger" unless @logger?
+
     @entityEvents          = {}
     @directListeners       = {}
     @nextDirectListenerKey = 0
@@ -39,7 +40,8 @@ class DomainRepository
               done()
           else
             @logger.log "transaction", "succeeded, comitting"
-            @_commit =>
+            @_commit (err) =>
+              throw err if err?
               @logger.log "transaction", "committed (#{@transactionQueue.length()} more transaction(s) in queue)"
               @transacting = false
               done()
@@ -77,11 +79,11 @@ class DomainRepository
 
   replayAllEvents: (options, callback) ->
     return callback new Error("Replay mode not set") unless @replaying
-    [options, callback] = [{}, options] unless callback?
-    lastEvent = null
 
-    @store.findAllEventsOneByOne options, (err, event, eventHandlerCallback) =>
-      return callback err if err?
+    [options, callback] = [{}, options] unless callback?
+    lastEvent           = null
+
+    @store.iterateOverAllEvents options, (event, eventHandlerCallback) =>
       event.replayed = true
       lastEvent      = event
       @_publishEvent event, eventHandlerCallback
@@ -153,12 +155,10 @@ class DomainRepository
           queue.push nextEvent if nextEvent?
 
           @logger.log "commit", "saving event \"#{event.name}\" for entity #{event.entityUid}"
-          @store.saveEvent event, (err, event) =>
-            savedEvents.push(event);
-            if err?
-              eventTaskCallback err
-            else
-              eventTaskCallback null
+          @store.saveEvent event, (err, event) ->
+            return callback err if err?
+            savedEvents.push event
+            eventTaskCallback null
         , 1
 
         queue.drain = entityTaskCallback
@@ -168,17 +168,21 @@ class DomainRepository
 
     , Infinity # TODO determine if it is safe to treat all entitys in parallel?
 
-    entityQueue.drain = (err) =>
-      return callback err if err?
+    entityQueue.drain = =>
       return callback null unless savedEvents.length > 0
+
       publicationQueue = async.queue (event, publicationCallback) =>
-        @_publishEvent event, publicationCallback
+        @_publishEvent event, (err) ->
+          return callback err if err?
+          publicationCallback()
       , Infinity
+
       publicationQueue.drain = callback
       publicationQueue.push savedEvents
 
     for entityUid, entityEvents of @entityEvents
       entityQueue.push [entityEvents]
+
     @entityEvents = {}
 
   _rollback: (callback) ->
@@ -189,23 +193,26 @@ class DomainRepository
     defer =>
       @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to direct listeners"
       @_publishEventToDirectListeners event, (err) =>
-        @logger.warn "publishEvent", "a direct listener failed: #{err}" if err?
+        return callback err if err?
+
         @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to event bus"
         if @silent
           callback()
         else
           @emitter.emit event, (err) =>
-            @logger.log "publishEvent", "event publication failed: #{err}" if err?
             callback err
 
   _publishEventToDirectListeners: (event, callback) ->
     directListeners = @directListeners[event.name]
 
-    queue = async.queue (directListener, callback) ->
-      directListener event, callback
+    queue = async.queue (directListener, taskCallback) ->
+      directListener event, (err) ->
+        return callback err if err?
+        taskCallback()
     , Infinity
 
     queue.drain = callback
+
     queuedListeners = false
     for _, directListener of directListeners
       queuedListeners = true unless queuedListeners
