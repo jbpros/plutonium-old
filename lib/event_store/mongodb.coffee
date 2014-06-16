@@ -91,7 +91,7 @@ class MongoDbEventStore extends Base
 
     startUid = options.startUid
     if startUid?
-      @eventCollection.findOne uid: startUid, (err, event) ->
+      @eventCollection.findOne uid: startUid, (err, event) =>
         return callback err if err?
 
         query =
