@@ -22,6 +22,10 @@ class MongoDbEventStore extends Base
     @eventCollectionName    = "events"
     @snapshotCollectionName = "snapshots"
 
+  createNewUid: (callback) ->
+    uid = uuid.v4()
+    callback null, uid
+
   initialize: (callback) ->
     async.waterfall [
       (next) =>
@@ -43,45 +47,86 @@ class MongoDbEventStore extends Base
 
   destroy: (callback) ->
     @_closeConnectionAndReturn @db, null, (err) =>
+      return callback err if err?
       @db                 = null
       @eventCollection    = null
       @snapshotCollection = null
       callback null
 
   _closeConnectionAndReturn: (db, err, callback) ->
-    db.close() if db?
-    callback err
+    if db?
+      db.close (closeErr) ->
+        return callback closeErr if closeErr?
+        callback err
+    else
+      callback err
 
   setup: (callback) ->
     async.series [
       (next) =>
         @eventCollection.remove next
       (next) =>
-        @eventCollection.ensureIndex {"entityUid": 1}, next
+        @eventCollection.ensureIndex {entityUid: 1}, next
       (next) =>
-        @eventCollection.ensureIndex {"entityUid": 1, "version": 1}, { unique: true }, next
+        @eventCollection.ensureIndex {entityUid: 1, version: 1}, { unique: true }, next
+      (next) =>
+        @eventCollection.ensureIndex {timestamp: 1, uid: 1}, next
       (next) =>
         @snapshotCollection.remove next
       (next) =>
-        @snapshotCollection.ensureIndex {"entityUid": 1}, next
+        @snapshotCollection.ensureIndex {entityUid: 1}, next
     ], callback
 
   createNewUid: (callback) ->
     uid = uuid.v4()
     callback null, uid
 
-  findAllEvents: (callback) ->
-    p = new Profiler "MongoDbEventStore#_find(db request)", @logger
-    p.start()
-    @eventCollection.find({}).sort("timestamp":1).toArray (err, items) =>
-      p.end()
+  iterateOverAllEvents: (options, eventHandler, callback) ->
+    [options, eventHandler, callback] = [{}, options, eventHandler] unless callback?
 
-      if err?
-        callback err
-      else if not items?
-        callback null, []
-      else
-        @_instantiateEventsFromRows items, callback
+    query     = {}
+    sortQuery =
+      timestamp: 1
+      uid: 1
+
+    startUid = options.startUid
+    if startUid?
+      @eventCollection.findOne uid: startUid, (err, event) =>
+        return callback err if err?
+
+        query =
+          timestamp:
+            $gte: event.timestamp
+          uid:
+            $ne: startUid
+
+        @_iterateOverEvents query, sortQuery, eventHandler, callback
+    else
+      @_iterateOverEvents query, sortQuery, eventHandler, callback
+
+  iterateOverEntityEventsAfterVersion: (entityUid, version, eventHandler, callback) ->
+    @_iterateOverEvents {entityUid: entityUid, version: {$gt: version}}, {version:1}, eventHandler, callback
+
+  iterateOverEntityEvents: (entityUid, eventHandler, callback) ->
+    @_iterateOverEvents {entityUid: entityUid}, {version:1}, eventHandler, callback
+
+  _iterateOverEvents: (params, order, eventHandler, callback) ->
+    p = new Profiler "MongoDbEventStore#_iterateOverEvents(db request)", @logger
+    p.start()
+    cursor = @eventCollection.find(params).sort(order)
+    retrieve = =>
+      cursor.nextObject (err, item) =>
+        return callback err if err?
+        if item?
+          @_instantiateEventFromRow item, (err, event) ->
+            return callback err if err?
+            eventHandler event, (err) ->
+              return callback err if err?
+              defer retrieve
+        else
+          p.end()
+          callback null
+    retrieve()
 
   findAllEventsByEntityUid: (entityUid, order, callback) ->
     [order, callback] = [null, order] unless callback?
@@ -93,9 +138,6 @@ class MongoDbEventStore extends Base
 
   findSomeEventsByEntityUidBeforeVersion: (entityUid, version, eventCount, callback) ->
     @_findLimited { entityUid: entityUid, version: { "$lte": version } }, eventCount, callback
-
-  findAllEventsByEntityUidAfterVersion: (entityUid, version, callback) ->
-    @_find entityUid: entityUid, version: { $gt: version }, callback
 
   saveEvent: (event, callback) =>
     @createNewUid (err, eventUid) =>
@@ -171,7 +213,7 @@ class MongoDbEventStore extends Base
         @logger.alert "MongoDbEventStore#saveSnapshot", "failed to save snapshot of entity \"#{snapshot.entityUid}\": #{err}"
       else
         @logger.log "MongoDbEventStore#saveSnapshot", "saved snapshot for entity \"#{snapshot.entityUid}\""
-      callback? err
+      callback err
 
   _findLimited: (params, eventCount, callback) ->
     p = new Profiler "MongoDbEventStore#_findLimited(db request)", @logger
@@ -211,27 +253,8 @@ class MongoDbEventStore extends Base
     return callback null, events if rows.length is 0
 
     rowsQueue = async.queue (row, rowCallback) =>
-      uid          = row.uid
-      name         = row.name
-      entityUid = row.entityUid
-      data         = row.data
-      timestamp    = row.timestamp
-      version      = row.version
-
-      @_loadAttachmentsFromRow row, (err, attachments) ->
-        return rowCallback err if err?
-
-        for attachmentName, attachmentBody of attachments
-          data[attachmentName] = attachmentBody
-
-        event = new Event
-          name: name
-          data: data
-          uid: uid
-          entityUid: entityUid
-          timestamp: timestamp
-          version: version
-
+      @_instantiateEventFromRow row, (err, event) ->
+        return callback err if err?
         events.push event
         defer rowCallback
     , 1
@@ -240,6 +263,30 @@ class MongoDbEventStore extends Base
       callback null, events
 
     rowsQueue.push rows
+
+  _instantiateEventFromRow: (row, callback) ->
+    uid          = row.uid
+    name         = row.name
+    entityUid = row.entityUid
+    data         = row.data
+    timestamp    = row.timestamp
+    version      = row.version
+
+    @_loadAttachmentsFromRow row, (err, attachments) ->
+      return rowCallback err if err?
+
+      for attachmentName, attachmentBody of attachments
+        data[attachmentName] = attachmentBody
+
+      event = new Event
+        name: name
+        data: data
+        uid: uid
+        entityUid: entityUid
+        timestamp: timestamp
+        version: version
+
+      callback null, event
 
   _loadAttachmentsFromRow: (row, callback) ->
     attachments = {}

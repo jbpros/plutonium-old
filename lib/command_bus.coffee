@@ -4,11 +4,11 @@ Profiler         = require "./profiler"
 
 class CommandBus
 
-  constructor: ({@domainRepository, @logger, @port}) ->
+  constructor: ({@domainRepository, @logger, @port, @replaying}) ->
     throw new Error "Missing domain repository" unless @domainRepository?
     throw new Error "Missing logger" unless @logger?
 
-    if @port
+    if @port && !@replaying
       @server = new CommandBusServer commandBus: @, port: @port, logger: @logger
       @server.listen @port
 
@@ -16,7 +16,7 @@ class CommandBus
 
   registerCommandHandler: (commandHandler) ->
     commandName = commandHandler.getCommandName()
-    throw new Error "A command and its handler for command named \"#{command}\" were already registered" if @commandHandlers[commandName]?
+    throw new Error "A command and its handler for command named \"#{commandName}\" were already registered" if @commandHandlers[commandName]?
     @commandHandlers[commandName] = commandHandler
 
   createNewUid: (callback) ->
@@ -57,6 +57,7 @@ class CommandBus
                 p2.end()
                 p.end()
                 done args...
+          transaction.callback = callback
         else
           transaction = (done) ->
             p.start()
