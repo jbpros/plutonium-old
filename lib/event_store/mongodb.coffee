@@ -122,7 +122,7 @@ class MongoDbEventStore extends Base
             return callback err if err?
             eventHandler event, (err) ->
               return callback err if err?
-              retrieve()
+              defer retrieve
         else
           p.end()
           callback null
