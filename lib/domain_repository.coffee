@@ -34,6 +34,8 @@ class DomainRepository
         @logger.warning "transaction", "exec", transaction.commandHandler.constructor.getCommandName(), "->", transaction.commandHandler
         defer =>
           transaction (err) =>
+            # TODO: remove
+            @logger.warning "transaction", "ended", err, transaction.commandHandler.constructor.getCommandName(), "->", transaction.commandHandler
             p.end()
             if err?
               @logger.alert "transaction", "failed, rolling back (#{err.stack || util.inspect(err)})"
