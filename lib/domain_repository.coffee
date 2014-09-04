@@ -30,13 +30,8 @@ class DomainRepository
         @logger.log "transaction", "starting"
         p = new Profiler "DomainRepository(transactionQueue.operation)", @logger
         p.start()
-        # TODO: remove
-        @logger.info "transaction", "exec", transaction.commandHandler.constructor.getCommandName(), "->", transaction.commandHandler
-        @logger.info "transaction code", transaction
         defer =>
           transaction (err) =>
-            # TODO: remove
-            @logger.info "transaction", "ended", err, transaction.commandHandler.constructor.getCommandName(), "->", transaction.commandHandler
             p.end()
             if err?
               @logger.alert "transaction", "failed, rolling back (#{err.stack || util.inspect(err)})"

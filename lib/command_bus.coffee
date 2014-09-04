@@ -22,7 +22,6 @@ class CommandBus
   createNewUid: (callback) ->
     @domainRepository.createNewUid callback
 
-  # TODO: remove logger.info
   executeCommand: (command, callback) ->
     domainRepository = @domainRepository
     logger           = @logger
@@ -46,10 +45,8 @@ class CommandBus
           transaction = (done) ->
             p.start()
             p1.start()
-            logger.info "executeCommand", "start transaction with validation"
             commandHandler.validate (err, result) ->
               p1.end()
-              logger.info "executeCommand", "validation done"
               if err?
                 logger.warning "executeCommand", "validation error", err
                 callback err
@@ -60,21 +57,14 @@ class CommandBus
               commandHandler.run (args...) ->
                 p2.end()
                 p.end()
-                logger.info "executeCommand", "execution done"
                 done args...
           transaction.callback = callback
-          # TODO: remove
-          transaction.commandHandler = commandHandler
         else
           transaction = (done) ->
             p.start()
-            logger.info "executeCommand", "start transaction without validation"
             commandHandler.run (args...) ->
               p.end()
-              logger.info "executeCommand", "execution done (no validation)"
               done args...
-          # TODO: remove
-          transaction.commandHandler = commandHandler
 
         domainRepository.queueTransaction transaction
         logger.log "CommandBus#executeCommand", "transaction for command '#{command.getName()}' queued"
