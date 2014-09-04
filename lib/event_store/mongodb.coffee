@@ -265,12 +265,12 @@ class MongoDbEventStore extends Base
     rowsQueue.push rows
 
   _instantiateEventFromRow: (row, callback) ->
-    uid          = row.uid
-    name         = row.name
+    uid       = row.uid
+    name      = row.name
     entityUid = row.entityUid
-    data         = row.data
-    timestamp    = row.timestamp
-    version      = row.version
+    data      = row.data
+    timestamp = row.timestamp
+    version   = row.version
 
     @_loadAttachmentsFromRow row, (err, attachments) ->
       return rowCallback err if err?
