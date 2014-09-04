@@ -31,11 +31,12 @@ class DomainRepository
         p = new Profiler "DomainRepository(transactionQueue.operation)", @logger
         p.start()
         # TODO: remove
-        @logger.warning "transaction", "exec", transaction.commandHandler.constructor.getCommandName(), "->", transaction.commandHandler
+        @logger.info "transaction", "exec", transaction.commandHandler.constructor.getCommandName(), "->", transaction.commandHandler
+        @logger.info "transaction code", transaction
         defer =>
           transaction (err) =>
             # TODO: remove
-            @logger.warning "transaction", "ended", err, transaction.commandHandler.constructor.getCommandName(), "->", transaction.commandHandler
+            @logger.info "transaction", "ended", err, transaction.commandHandler.constructor.getCommandName(), "->", transaction.commandHandler
             p.end()
             if err?
               @logger.alert "transaction", "failed, rolling back (#{err.stack || util.inspect(err)})"
