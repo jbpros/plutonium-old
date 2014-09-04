@@ -58,12 +58,16 @@ class CommandBus
                 p.end()
                 done args...
           transaction.callback = callback
+          # TODO: remove
+          transaction.commandHandler = commandHandler
         else
           transaction = (done) ->
             p.start()
             commandHandler.run (args...) ->
               p.end()
               done args...
+          # TODO: remove
+          transaction.commandHandler = commandHandler
 
         domainRepository.queueTransaction transaction
         logger.log "CommandBus#executeCommand", "transaction for command '#{command.getName()}' queued"
