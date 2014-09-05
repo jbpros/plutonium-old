@@ -30,22 +30,21 @@ class DomainRepository
         @logger.log "transaction", "starting"
         p = new Profiler "DomainRepository(transactionQueue.operation)", @logger
         p.start()
-        defer =>
-          transaction (err) =>
-            p.end()
-            if err?
-              @logger.alert "transaction", "failed, rolling back (#{err.stack || util.inspect(err)})"
-              @_rollback =>
-                @logger.log "transaction", "rolled back (#{@transactionQueue.length()} more transaction(s) in queue)"
-                @transacting = false
-                done()
-            else
-              @logger.log "transaction", "succeeded, comitting"
-              @_commit (err) =>
-                throw err if err?
-                @logger.log "transaction", "committed (#{@transactionQueue.length()} more transaction(s) in queue)"
-                @transacting = false
-                done()
+        transaction (err) =>
+          p.end()
+          if err?
+            @logger.alert "transaction", "failed, rolling back (#{err.stack || util.inspect(err)})"
+            @_rollback =>
+              @logger.log "transaction", "rolled back (#{@transactionQueue.length()} more transaction(s) in queue)"
+              @transacting = false
+              done()
+          else
+            @logger.log "transaction", "succeeded, comitting"
+            @_commit (err) =>
+              throw err if err?
+              @logger.log "transaction", "committed (#{@transactionQueue.length()} more transaction(s) in queue)"
+              @transacting = false
+              done()
     , 1
 
   queueTransaction: (transaction) ->
