@@ -158,28 +158,27 @@ class PostgresqlEventStore extends Base
     callback null
 
   setup: (callback) ->
-    console.log "Setup postgresql event store"
     async.series [
       (next) =>
-        console.log "Dropping event table"
+        @logger.info "Postgres event store", "Dropping event table"
         @_dropEventTable next
       (next) =>
-        console.log "Creating event table"
+        @logger.info "Postgres event store", "Creating event table"
         @_createEventTable next
       (next) =>
-        console.log "Creating index on event table"
+        @logger.info "Postgres event store", "Creating index on event table"
         @_createIndexOnEventTable next
       (next) =>
-        console.log "Adding auto increment on event table"
+        @logger.info "Postgres event store", "Adding auto increment on event table"
         @_addAutoIncrementOnEventVersion next
       (next) =>
-        console.log "Dropping snapshot table"
+        @logger.info "Postgres event store", "Dropping snapshot table"
         @_dropSnapshotTable next
       (next) =>
-        console.log "Creating snapshot table"
+        @logger.info "Postgres event store", "Creating snapshot table"
         @_createSnapshotTable next
       (next) =>
-        console.log "Creating index on snapshot table"
+        @logger.info "Postgres event store", "Creating index on snapshot table"
         @_createIndexOnSnapshotTable next
     ], callback
 
@@ -196,10 +195,6 @@ class PostgresqlEventStore extends Base
     p = new Profiler "PostgresqlEventStore#_iterateOverEvents (db request)", @logger
     p.start()
 
-    treatedRows  = 0
-    affectedRows = undefined
-    returned     = false
-
     pg.connect @uri, (err, client, done) =>
       return @_handleError(err, client, done, callback) if err?
 
@@ -215,7 +210,8 @@ class PostgresqlEventStore extends Base
       clientReceiver = client.query query
 
       clientReceiver.on "error", (err) =>
-        return @_handleError(err, client, done, callback) if err?
+        p.end()
+        return @_handleError(err, client, done, callback)
 
       clientReceiver.on "row", (row) =>
         @_instantiateEventFromRow row, (err, event) ->
@@ -224,20 +220,10 @@ class PostgresqlEventStore extends Base
           eventHandler event, (err) ->
             return @_handleError(err, client, done, callback) if err?
 
-            treatedRows++
-            if treatedRows is affectedRows and not returned
-              p.end()
-              returned = true
-              return callback null
-
       clientReceiver.on "end", (results) =>
-        affectedRows = results.rowCount
+        p.end()
         done()
-
-        if treatedRows is affectedRows and not returned
-          p.end()
-          returned = true
-          return callback null
+        callback()
 
   findAllEvents: (options, callback) ->
     params = true
