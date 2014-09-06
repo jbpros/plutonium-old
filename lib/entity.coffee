@@ -1,4 +1,3 @@
-async        = require "async"
 Q            = require "q"
 DomainObject = require "./domain_object"
 inherit      = require "./inherit"
