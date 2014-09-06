@@ -203,20 +203,22 @@ class DomainRepository
             callback err
 
   _publishEventToDirectListeners: (event, callback) ->
-    directListeners = @directListeners[event.name]
+    directListeners  = @directListeners[event.name]
+    pending          = 0
+    errors           = []
+    queuedListeners  = false
 
-    queue = async.queue (directListener, taskCallback) ->
-      directListener event, (err) ->
-        return callback err if err?
-        taskCallback()
-    , Infinity
-
-    queue.drain = callback
-
-    queuedListeners = false
     for _, directListener of directListeners
       queuedListeners = true unless queuedListeners
-      queue.push directListener
+      pending++
+      directListener event, (err) ->
+        if err?
+          @logger.error "DomainRepository#_publishEventToDirectListeners", "a direct listener failed: #{err}"
+          errors.push err
+        pending--
+        if pending is 0
+          error = if errors.length > 0 then new Error "Some direct listener(s) failed" else null
+          callback error
 
     callback null unless queuedListeners
 
