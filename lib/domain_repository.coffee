@@ -172,9 +172,10 @@ class DomainRepository
       return callback null unless savedEvents.length > 0
 
       publicationQueue = async.queue (event, publicationCallback) =>
-        @_publishEvent event, (err) ->
-          return callback err if err?
-          publicationCallback()
+        defer =>
+          @_publishEvent event, (err) ->
+            return callback err if err?
+            publicationCallback()
       , Infinity
 
       publicationQueue.drain = callback
@@ -190,17 +191,16 @@ class DomainRepository
     callback()
 
   _publishEvent: (event, callback) ->
-    defer =>
-      @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to direct listeners"
-      @_publishEventToDirectListeners event, (err) =>
-        return callback err if err?
+    @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to direct listeners"
+    @_publishEventToDirectListeners event, (err) =>
+      return callback err if err?
 
-        @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to event bus"
-        if @silent
-          callback()
-        else
-          @emitter.emit event, (err) =>
-            callback err
+      @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to event bus"
+      if @silent
+        callback()
+      else
+        @emitter.emit event, (err) =>
+          callback err
 
   _publishEventToDirectListeners: (event, callback) ->
     directListeners  = @directListeners[event.name]
