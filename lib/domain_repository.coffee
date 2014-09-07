@@ -4,9 +4,6 @@ EntityInstantiator = require "./entity_instantiator"
 util               = require "util"
 defer              = require "./defer"
 
-COUCHDB_STORE = "couchdb"
-REDIS_STORE   = "redis"
-
 class DomainRepository
 
   constructor: ({@store, @emitter, @logger, @replaying}) ->
