@@ -1,8 +1,8 @@
-async              = require "async"
 Profiler           = require "./profiler"
 EntityInstantiator = require "./entity_instantiator"
 util               = require "util"
 defer              = require "./defer"
+Queue              = require "./queue"
 
 class DomainRepository
 
@@ -17,7 +17,7 @@ class DomainRepository
     @transacting           = false
     @halted                = false
     @silent                = false
-    @transactionQueue      = async.queue (transaction, done) =>
+    @transactionQueue      = new Queue (transaction, done) =>
       if @halted
         @logger.warning "transaction", "skipped (#{@transactionQueue.length()} more transaction(s) in queue)"
         transaction.callback() if transaction.callback?
@@ -143,11 +143,11 @@ class DomainRepository
 
     savedEvents = [];
 
-    entityQueue = async.queue (entityAppliedEvents, entityTaskCallback) =>
+    entityQueue = new Queue (entityAppliedEvents, entityTaskCallback) =>
       firstEvent = entityAppliedEvents.shift()
 
       if firstEvent?
-        queue = async.queue (event, eventTaskCallback) =>
+        queue = new Queue (event, eventTaskCallback) =>
           nextEvent = entityAppliedEvents.shift()
           queue.push nextEvent if nextEvent?
 
@@ -168,7 +168,7 @@ class DomainRepository
     entityQueue.drain = =>
       return callback null unless savedEvents.length > 0
 
-      publicationQueue = async.queue (event, publicationCallback) =>
+      publicationQueue = new Queue (event, publicationCallback) =>
         defer =>
           @_publishEvent event, (err) ->
             return callback err if err?
