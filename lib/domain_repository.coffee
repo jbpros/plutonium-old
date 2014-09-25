@@ -202,10 +202,11 @@ class DomainRepository
     queuedListeners  = false
     logger           = @logger
 
-    logger.log "DomainRepository#_publishEventToDirectListeners", "publishing \"#{event.name}\" from entity #{event.entityUid} to direct listeners"
-
     for _, directListener of directListeners
-      queuedListeners = true unless queuedListeners
+      if !queuedListeners
+        queuedListeners = true
+        logger.log "DomainRepository#_publishEventToDirectListeners", "publishing \"#{event.name}\" from entity #{event.entityUid} to direct listeners"
+
       pending++
       directListener event, (err) ->
         if err?
