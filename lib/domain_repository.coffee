@@ -188,12 +188,13 @@ class DomainRepository
   _publishEvent: (event, callback) ->
     @_publishEventToDirectListeners event, (err) =>
       return callback err if err?
+      @_publishEventToEventBus event, callback
 
-      if @silent
-        callback()
-      else
-        @emitter.emit event, (err) =>
-          callback err
+  _publishEventToEventBus: (event, callback) ->
+    if @silent
+      callback null
+    else
+      @emitter.emit event, callback
 
   _publishEventToDirectListeners: (event, callback) ->
     directListeners  = @directListeners[event.name]
