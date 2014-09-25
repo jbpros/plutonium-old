@@ -113,7 +113,7 @@ class MongoDbEventStore extends Base
   _iterateOverEvents: (params, order, eventHandler, callback) ->
     p = new Profiler "MongoDbEventStore#_iterateOverEvents(db request)", @logger
     p.start()
-    cursor = @eventCollection.find(params).sort(order)
+    cursor = @eventCollection.find(params).batchSize(1000).sort(order)
     retrieve = =>
       cursor.nextObject (err, item) =>
         return callback err if err?

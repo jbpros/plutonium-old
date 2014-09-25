@@ -186,11 +186,9 @@ class DomainRepository
     callback()
 
   _publishEvent: (event, callback) ->
-    @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to direct listeners"
     @_publishEventToDirectListeners event, (err) =>
       return callback err if err?
 
-      @logger.log "publishEvent", "publishing \"#{event.name}\" from entity #{event.entityUid} to event bus"
       if @silent
         callback()
       else
@@ -202,13 +200,16 @@ class DomainRepository
     pending          = 0
     errors           = []
     queuedListeners  = false
+    logger           = @logger
+
+    logger.log "DomainRepository#_publishEventToDirectListeners", "publishing \"#{event.name}\" from entity #{event.entityUid} to direct listeners"
 
     for _, directListener of directListeners
       queuedListeners = true unless queuedListeners
       pending++
       directListener event, (err) ->
         if err?
-          @logger.error "DomainRepository#_publishEventToDirectListeners", "a direct listener failed: #{err}"
+          logger.error "DomainRepository#_publishEventToDirectListeners", "a direct listener failed: #{err}"
           errors.push err
         pending--
         if pending is 0
