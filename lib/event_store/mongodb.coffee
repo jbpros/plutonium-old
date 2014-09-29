@@ -43,14 +43,19 @@ class MongoDbEventStore extends Base
 
   destroy: (callback) ->
     @_closeConnectionAndReturn @db, null, (err) =>
+      return callback err if err?
       @db                 = null
       @eventCollection    = null
       @snapshotCollection = null
       callback null
 
   _closeConnectionAndReturn: (db, err, callback) ->
-    db.close() if db?
-    callback err
+    if db?
+      db.close (closeErr) ->
+        return callback closeErr if closeErr?
+        callback err
+    else
+      callback err
 
   setup: (callback) ->
     async.series [
@@ -70,18 +75,22 @@ class MongoDbEventStore extends Base
     uid = uuid.v4()
     callback null, uid
 
-  findAllEvents: (callback) ->
+  findAllEventsOneByOne: (eventHandler, callback) ->
     p = new Profiler "MongoDbEventStore#_find(db request)", @logger
     p.start()
-    @eventCollection.find({}).sort("timestamp":1).toArray (err, items) =>
-      p.end()
-
-      if err?
-        callback err
-      else if not items?
-        callback null, []
-      else
-        @_instantiateEventsFromRows items, callback
+    cursor = @eventCollection.find({}).sort("timestamp":1)
+    retrieve = =>
+      cursor.nextObject (err, item) =>
+        return callback err if err?
+        if item?
+          @_instantiateEventFromRow item, (err, event) ->
+            eventHandler err, event, (err) ->
+              return callback err if err?
+              retrieve()
+        else
+          p.end()
+          callback null
+    retrieve()
 
   findAllEventsByEntityUid: (entityUid, order, callback) ->
     [order, callback] = [null, order] unless callback?
@@ -211,27 +220,8 @@ class MongoDbEventStore extends Base
     return callback null, events if rows.length is 0
 
     rowsQueue = async.queue (row, rowCallback) =>
-      uid          = row.uid
-      name         = row.name
-      entityUid = row.entityUid
-      data         = row.data
-      timestamp    = row.timestamp
-      version      = row.version
-
-      @_loadAttachmentsFromRow row, (err, attachments) ->
-        return rowCallback err if err?
-
-        for attachmentName, attachmentBody of attachments
-          data[attachmentName] = attachmentBody
-
-        event = new Event
-          name: name
-          data: data
-          uid: uid
-          entityUid: entityUid
-          timestamp: timestamp
-          version: version
-
+      @_instantiateEventFromRow row, (err, event) ->
+        return callback err if err?
         events.push event
         defer rowCallback
     , 1
@@ -240,6 +230,30 @@ class MongoDbEventStore extends Base
       callback null, events
 
     rowsQueue.push rows
+
+  _instantiateEventFromRow: (row, callback) ->
+    uid          = row.uid
+    name         = row.name
+    entityUid = row.entityUid
+    data         = row.data
+    timestamp    = row.timestamp
+    version      = row.version
+
+    @_loadAttachmentsFromRow row, (err, attachments) ->
+      return rowCallback err if err?
+
+      for attachmentName, attachmentBody of attachments
+        data[attachmentName] = attachmentBody
+
+      event = new Event
+        name: name
+        data: data
+        uid: uid
+        entityUid: entityUid
+        timestamp: timestamp
+        version: version
+
+      callback null, event
 
   _loadAttachmentsFromRow: (row, callback) ->
     attachments = {}

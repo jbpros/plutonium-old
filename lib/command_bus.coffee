@@ -57,6 +57,7 @@ class CommandBus
                 p2.end()
                 p.end()
                 done args...
+          transaction.callback = callback
         else
           transaction = (done) ->
             p.start()

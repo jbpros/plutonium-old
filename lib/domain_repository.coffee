@@ -22,6 +22,7 @@ class DomainRepository
     @transactionQueue      = async.queue (transaction, done) =>
       if @halted
         @logger.warning "transaction", "skipped (#{@transactionQueue.length()} more transaction(s) in queue)"
+        transaction.callback() if transaction.callback?
         done()
       else
         @transacting = true
@@ -75,16 +76,10 @@ class DomainRepository
     entityInstantiator.findByUid uid, callback
 
   replayAllEvents: (callback) ->
-    @store.findAllEvents (err, events) =>
-      if events.length > 0
-        eventQueue = async.queue (event, eventTaskCallback) =>
-          event.replayed = true
-          @_publishEvent event, eventTaskCallback
-        , 1
-        eventQueue.drain = callback
-        eventQueue.push events
-      else
-        callback()
+    @store.findAllEventsOneByOne (err, event, eventHandlerCallback) =>
+      event.replayed = true
+      @_publishEvent event, eventHandlerCallback
+    , callback
 
   getLastPublishedEvents: () ->
     @emitter.lastEmittedEvents

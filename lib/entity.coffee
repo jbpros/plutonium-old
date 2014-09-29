@@ -35,9 +35,9 @@ Entity = (name, finalCtor, Ctor) ->
   Base::_initializeAtVersion = (version) ->
     @$version          = version
     @$appliedEvents    = []
-    @$domainRepository = finalCtor.$domainRepository
-    @$commandBus       = finalCtor.$commandBus
-    @$logger           = finalCtor.$logger
+    @$domainRepository = Entity.domainRepository
+    @$commandBus       = Entity.commandBus
+    @$logger           = Entity.logger
 
   Base::_serialize = (contained) ->
     throw new Error "References between entity are forbidden" if contained
@@ -96,12 +96,11 @@ Entity = (name, finalCtor, Ctor) ->
     deferred = Q.defer()
     deferred.promise.nodeify callback
     if uid?
-      @$domainRepository.findEntityByUid @, uid, (err, entity) ->
+      @$domainRepository.findEntityByUid @, uid, (err, entity) =>
         if err?
           deferred.reject err
-        else if not entity
-          deferred.reject new Error "Could not find entity with UID " + uid
         else
+          @$logger.error "findByUid", "Could not find entity with UID #{uid}" if not entity
           deferred.resolve entity
     else
       deferred.reject(new Error 'Please provide a UID to find')
