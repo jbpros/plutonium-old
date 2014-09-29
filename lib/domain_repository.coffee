@@ -1,7 +1,6 @@
 Profiler           = require "./profiler"
 EntityInstantiator = require "./entity_instantiator"
 util               = require "util"
-defer              = require "./defer"
 Queue              = require "./queue"
 
 class DomainRepository
@@ -169,10 +168,9 @@ class DomainRepository
       return callback null unless savedEvents.length > 0
 
       publicationQueue = new Queue (event, publicationCallback) =>
-        defer =>
-          @_publishEvent event, (err) ->
-            return callback err if err?
-            publicationCallback()
+        @_publishEvent event, (err) ->
+          return callback err if err?
+          publicationCallback()
       , Infinity
 
       publicationQueue.drain = callback
